@@ -40,8 +40,8 @@ change the container paths or web bind address.
 | Variable | Default in container | Description |
 | --- | --- | --- |
 | `BAZARR_CONFIG_PATH` | `/bazarr-config/config.yaml` | Bazarr config file used as a fallback source for the Bazarr API key. |
-| `QUEUE_DIR` | `/state/queue` | Queue directory shared with the Bazarr post-processing script. |
-| `STATE_DIR` | `/state` | Base state directory for config, queue, logs, cache, and backups. |
+| `QUEUE_DIR` | `/queue` | Queue directory shared with the Bazarr post-processing script. |
+| `STATE_DIR` | `/state` | Base state directory for config, logs, cache, and backups. |
 | `LOG_DIR` | `/state/logs` | Worker log directory. |
 | `APP_CONFIG_PATH` | `/state/config.json` | Web-console app settings file. |
 | `POSTPROCESS_TARGETS_PATH` | `/bazarr-postprocess/targets.json` | Source/target language rules read by the Bazarr enqueue script. |
@@ -60,7 +60,7 @@ docker run -d \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
   -v /opt/docker/gemini-srt-translator-bazarr:/state \
-  -v /opt/docker/bazarr/postprocess/queue:/state/queue \
+  -v /opt/docker/bazarr/postprocess/queue:/queue \
   ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
 ```
 
@@ -206,8 +206,8 @@ For a full personal deployment backup, also back up:
 /opt/docker/gemini-srt-translator-bazarr/backups
 ```
 
-`/state/logs` and `/state/queue` are useful for troubleshooting but are runtime
-state, not required configuration.
+`/state/logs` and `/queue` are useful for troubleshooting but are runtime state,
+not required configuration.
 
 ## Languages
 

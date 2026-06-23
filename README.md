@@ -100,11 +100,11 @@ docker run -d \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
   -v /opt/docker/gemini-srt-translator-bazarr:/state \
-  -v /opt/docker/bazarr/postprocess/queue:/state/queue \
+  -v /opt/docker/bazarr/postprocess/queue:/queue \
   ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
 ```
 
-The container already defaults to `/state`, `/state/queue`,
+The container already defaults to `/state`, `/queue`,
 `/bazarr-postprocess/targets.json`, and web port `6789`, so the direct
 `docker run` form only needs the host paths and public settings.
 Open `http://<docker-host>:6789/` and enter the Bazarr, Gemini, and TMDB
@@ -222,8 +222,7 @@ tar -czf gemini-srt-translator-bazarr-backup.tgz \
   /opt/docker/bazarr/postprocess/targets.json
 ```
 
-Queue files and logs live under `/state` too, but they are runtime state rather
-than required configuration.
+Queue files and logs are runtime state rather than required configuration.
 
 ## Bazarr Setup
 

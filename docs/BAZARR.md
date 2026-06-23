@@ -42,7 +42,7 @@ The worker needs the same post-processing directory and queue:
 ```yaml
 volumes:
   - /opt/docker/bazarr/postprocess:/bazarr-postprocess
-  - /opt/docker/bazarr/postprocess/queue:/state/queue
+  - /opt/docker/bazarr/postprocess/queue:/queue
 ```
 
 ## What Gets Queued

@@ -29,7 +29,7 @@ services:
       WORKER_SLEEP_SECONDS: ${WORKER_SLEEP_SECONDS:-15}
       HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-20}
       BAZARR_CONFIG_PATH: /bazarr-config/config.yaml
-      QUEUE_DIR: /state/queue
+      QUEUE_DIR: /queue
       STATE_DIR: /state
       LOG_DIR: /state/logs
       APP_CONFIG_PATH: /state/config.json
@@ -44,4 +44,4 @@ services:
       - ${BAZARR_CONFIG_DIR:-/opt/docker/bazarr/config}:/bazarr-config:ro
       - ${BAZARR_POSTPROCESS_DIR:-/opt/docker/bazarr/postprocess}:/bazarr-postprocess
       - ${WORKER_STATE_DIR:-/opt/docker/gemini-srt-translator-bazarr}:/state
-      - ${BAZARR_POSTPROCESS_DIR:-/opt/docker/bazarr/postprocess}/queue:/state/queue
+      - ${BAZARR_POSTPROCESS_DIR:-/opt/docker/bazarr/postprocess}/queue:/queue

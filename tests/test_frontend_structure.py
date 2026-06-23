@@ -105,6 +105,14 @@ class DeploymentConfigTests(unittest.TestCase):
         self.assertIn("WORKER_STATE_DIR=/opt/docker/gemini-srt-translator-bazarr", env_example)
         self.assertNotIn("WORKER_STATE_DIR=/opt/docker/gemini-srt-translator-bazarr/state", env_example)
 
+    def test_queue_mount_is_outside_worker_state_mount(self):
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn("QUEUE_DIR: /queue", compose)
+        self.assertIn("${BAZARR_POSTPROCESS_DIR:-/opt/docker/bazarr/postprocess}/queue:/queue", compose)
+        self.assertNotIn("QUEUE_DIR: /state/queue", compose)
+        self.assertNotIn(":/state/queue", compose)
+
 
 if __name__ == "__main__":
     unittest.main()
