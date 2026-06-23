@@ -20,8 +20,8 @@ the matching item again.
 - Settings page shows configured secrets as `**********` and provides API-key
   test buttons for Bazarr, Gemini, and TMDB.
 - gemini-srt-translator options are configurable in the web console, including
-  model selection from a dropdown, batch size, quota mode, logs, and model
-  tuning parameters.
+  model selection from a dropdown, batch size, quota mode, logs, token reports,
+  and model tuning parameters.
 - Multi-source and multi-target output support, for example `en -> zh`,
   `ja -> zh`, `zh -> en`.
 - Single-worker queue so Gemini quota is not consumed by uncontrolled parallel
@@ -157,7 +157,7 @@ Secret values are stored in `/state/config.json` and are not returned by the
 public settings API.
 
 gemini-srt-translator settings such as model, batch size, paid quota mode,
-progress/thought logs, and model tuning options are also stored in
+progress/thought logs, token reports, and model tuning options are also stored in
 `/state/config.json`.
 
 Create the shared post-processing directory and install the enqueue script:

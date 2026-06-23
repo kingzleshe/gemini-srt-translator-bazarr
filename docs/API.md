@@ -97,6 +97,7 @@ current stored key.
   "gst_quiet": true,
   "gst_progress_log": false,
   "gst_thoughts_log": false,
+  "gst_token_report": false,
   "gst_temperature": "0.7",
   "gst_top_p": "0.95",
   "gst_top_k": "40",

@@ -201,6 +201,7 @@ class WorkerTests(unittest.TestCase):
                     "gst_thinking_level": "medium",
                     "gst_no_streaming": True,
                     "gst_no_thinking": True,
+                    "gst_token_report": True,
                     "gst_token_stats": True,
                     "gst_no_context": True,
                     "job_settle_seconds": 600,
@@ -221,6 +222,7 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(saved["gst_thinking_level"], "medium")
             self.assertTrue(saved["gst_no_streaming"])
             self.assertTrue(saved["gst_no_thinking"])
+            self.assertTrue(saved["gst_token_report"])
             self.assertNotIn("gst_token_stats", saved)
             self.assertTrue(saved["gst_no_context"])
             self.assertEqual(saved["job_settle_seconds"], 600)
@@ -969,6 +971,7 @@ class WorkerTests(unittest.TestCase):
                 "gst_thinking_level": "medium",
                 "gst_no_streaming": True,
                 "gst_no_thinking": True,
+                "gst_token_report": True,
                 "gst_token_stats": True,
                 "gst_no_context": True,
             },
@@ -981,6 +984,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIn("--thoughts-log", command)
         self.assertIn("--no-streaming", command)
         self.assertIn("--no-thinking", command)
+        self.assertIn("--token-report", command)
         self.assertNotIn("--token-stats", command)
         self.assertIn("--no-context", command)
         self.assertIn("--temperature", command)

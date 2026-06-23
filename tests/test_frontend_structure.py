@@ -48,12 +48,15 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn('id="clear-logs"', html)
         self.assertIn('id="gst-model-select"', html)
         self.assertIn('id="job-settle-seconds-input"', html)
+        self.assertIn('id="gst-token-report-input"', html)
+        self.assertIn("Token report", html)
         self.assertNotIn('id="gst-token-stats-input"', html)
         self.assertNotIn("Token stats", html)
         self.assertNotIn('id="gst-model-input"', html)
         self.assertIn("/api/logs/clear", app_js)
         self.assertIn("/api/gemini-models", app_js)
         self.assertIn("job_settle_seconds", app_js)
+        self.assertIn("gst_token_report", app_js)
         self.assertNotIn("gst_token_stats", app_js)
 
     def test_backup_ui_supports_download_and_import(self):

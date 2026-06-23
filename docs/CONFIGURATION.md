@@ -126,6 +126,7 @@ Default:
   "gst_quiet": true,
   "gst_progress_log": false,
   "gst_thoughts_log": false,
+  "gst_token_report": false,
   "gst_temperature": "0.7",
   "gst_top_p": "0.95",
   "gst_top_k": "40",
@@ -163,6 +164,8 @@ The Settings page writes these `gst translate` options into app config:
 - `gst_quiet`: enables `--quiet`.
 - `gst_progress_log`: enables `--progress-log`.
 - `gst_thoughts_log`: enables `--thoughts-log`.
+- `gst_token_report`: enables `--token-report`, which writes the upstream
+  token and cost report JSON next to the input subtitle by default.
 - `gst_temperature`, `gst_top_p`, `gst_top_k`: model tuning values.
 - `gst_thinking_budget`, `gst_thinking_level`: thinking controls.
 - `gst_no_streaming`, `gst_no_thinking`, `gst_no_context`: boolean CLI

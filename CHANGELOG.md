@@ -18,6 +18,7 @@ versioning once tagged releases begin.
 - Automatic scheduled backups every 7 days with 30-day backup retention.
 - API key masking and connection test buttons for Bazarr, Gemini, and TMDB.
 - Gemini model dropdown and gemini-srt-translator CLI settings in the web console.
+- Token report setting for gemini-srt-translator 3.5.7 `--token-report`.
 - Recommended gemini-srt-translator tuning defaults for automated subtitle
   translation.
 - Configurable 10-minute default queue settle window to avoid translating while

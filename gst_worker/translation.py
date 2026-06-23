@@ -49,6 +49,7 @@ def build_gst_command(
         ("--paid-quota", "gst_paid_quota", False),
         ("--progress-log", "gst_progress_log", False),
         ("--thoughts-log", "gst_thoughts_log", False),
+        ("--token-report", "gst_token_report", False),
         ("--no-streaming", "gst_no_streaming", False),
         ("--no-thinking", "gst_no_thinking", False),
         ("--no-context", "gst_no_context", False),

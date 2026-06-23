@@ -235,6 +235,7 @@ function fillSettings(settings) {
   document.getElementById("gst-quiet-input").checked = settings.gst_quiet !== false;
   document.getElementById("gst-progress-log-input").checked = Boolean(settings.gst_progress_log);
   document.getElementById("gst-thoughts-log-input").checked = Boolean(settings.gst_thoughts_log);
+  document.getElementById("gst-token-report-input").checked = Boolean(settings.gst_token_report);
   document.getElementById("gst-temperature-input").value = settings.gst_temperature || "";
   document.getElementById("gst-top-p-input").value = settings.gst_top_p || "";
   document.getElementById("gst-top-k-input").value = settings.gst_top_k || "";
@@ -268,6 +269,7 @@ function parseSettings() {
     gst_quiet: document.getElementById("gst-quiet-input").checked,
     gst_progress_log: document.getElementById("gst-progress-log-input").checked,
     gst_thoughts_log: document.getElementById("gst-thoughts-log-input").checked,
+    gst_token_report: document.getElementById("gst-token-report-input").checked,
     gst_temperature: document.getElementById("gst-temperature-input").value.trim(),
     gst_top_p: document.getElementById("gst-top-p-input").value.trim(),
     gst_top_k: document.getElementById("gst-top-k-input").value.trim(),
