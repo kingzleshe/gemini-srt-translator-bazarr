@@ -77,8 +77,10 @@ The default image is published to GitHub Container Registry:
 ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
 ```
 
-`latest` is rebuilt from the `main` branch by GitHub Actions. After a new image
-is published, update a Docker host with:
+The image is published for `linux/amd64` and `linux/arm64`, including Raspberry
+Pi 4 running a 64-bit OS. `latest` is rebuilt from the `main` branch by GitHub
+Actions when image-related files change. After a new image is published, update
+a Docker host with:
 
 ```bash
 docker compose pull
@@ -232,10 +234,12 @@ The repository includes `.github/workflows/docker-image.yml`. On every push to
 - `ghcr.io/kingzleshe/gemini-srt-translator-bazarr:sha-<commit>`
 - version tags such as `v1.0.0` when the Git tag matches `v*.*.*`
 
-This keeps deployment simple: push to GitHub, wait for the Docker image workflow
-to finish, then run `docker compose pull && docker compose up -d` on the server.
-If an anonymous `docker pull` is denied after the first publish, open the
-package in GitHub Packages and make the container package public.
+This keeps deployment simple: push code that affects the image, wait for the
+Docker image workflow to finish, then run
+`docker compose pull && docker compose up -d` on the server. Documentation-only
+changes do not rebuild the image. If an anonymous `docker pull` is denied after
+the first publish, open the package in GitHub Packages and make the container
+package public.
 
 ## Bazarr Setup
 

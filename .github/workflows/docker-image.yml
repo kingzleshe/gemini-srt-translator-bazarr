@@ -6,6 +6,15 @@ on:
       - main
     tags:
       - "v*.*.*"
+    paths:
+      - ".github/workflows/docker-image.yml"
+      - ".dockerignore"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "worker.py"
+      - "gst_worker/**"
+      - "static/**"
+      - "bazarr-postprocess/**"
   workflow_dispatch:
 
 permissions:
@@ -23,6 +32,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -49,6 +61,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           build-args: |
             INSTALL_FFMPEG=false
           tags: ${{ steps.meta.outputs.tags }}
