@@ -288,7 +288,8 @@ h1 {
 }
 
 .settings-panel {
-  padding-bottom: 14px;
+  max-width: 1180px;
+  padding-bottom: 0;
 }
 
 label {
@@ -314,30 +315,74 @@ textarea {
   resize: vertical;
 }
 
+.settings-form {
+  display: grid;
+}
+
 .inline-field {
   max-width: 220px;
 }
 
 .settings-section {
-  margin: 8px 14px 0;
-  padding: 12px 0 4px;
+  margin: 0;
+  padding: 16px;
   border-top: 1px solid var(--border);
 }
 
-.settings-section h3 {
-  padding: 0 0 8px;
-  font-size: 15px;
+.settings-section:first-child {
+  border-top: 0;
 }
 
-.settings-section label {
-  padding: 8px 0;
+.settings-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.settings-section h3 {
+  padding: 0;
+  font-size: 14px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 14px 18px;
+  align-items: start;
+}
+
+.form-grid-compact {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.field {
+  align-content: start;
+  min-width: 0;
+  padding: 0;
+}
+
+.field > span:first-child {
+  font-size: 13px;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
 }
 
 .setting-grid,
 .tuning-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
-  gap: 4px 12px;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.tuning-grid {
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  margin-bottom: 12px;
 }
 
 .check-field {
@@ -345,6 +390,12 @@ textarea {
   grid-template-columns: none;
   align-items: center;
   gap: 8px;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #181d23;
+  color: var(--text);
 }
 
 .check-field input {
@@ -405,18 +456,19 @@ textarea {
 
 .language-picker {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 76px;
   gap: 8px;
 }
 
 .secret-field {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 76px;
   gap: 8px;
+  align-items: start;
 }
 
 .selected-languages {
-  min-height: 38px;
+  min-height: 40px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -465,6 +517,18 @@ pre {
   display: block;
 }
 
+@media (max-width: 1200px) {
+  .form-grid,
+  .form-grid-compact,
+  .setting-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .tuning-grid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
   body {
     grid-template-columns: 1fr;
@@ -487,6 +551,19 @@ pre {
 
   .row {
     grid-template-columns: 1fr;
+  }
+
+  .settings-section {
+    padding: 14px;
+  }
+
+  .form-grid,
+  .form-grid-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .field-wide {
+    grid-column: auto;
   }
 
   .language-picker {
