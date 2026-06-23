@@ -12,7 +12,8 @@ Copy `.env.example` to `.env` and edit values for your host.
 | `TMDB_API_KEY` | No | empty | Used to build movie/show/episode descriptions; can also be set in the web console. |
 | `BAZARR_URL` | Yes | `http://bazarr:6767` | Bazarr base URL from inside the worker container. |
 | `BAZARR_API_KEY` | No | empty | If empty, the worker tries app settings, then Bazarr `config.yaml`. |
-| `INSTALL_FFMPEG` | No | `false` | Optional image build flag. Leave false when Bazarr extracts subtitles. |
+| `INSTALL_FFMPEG` | No | `false` | Optional local image build flag. Leave false when Bazarr extracts subtitles. |
+| `GST_BAZARR_IMAGE` | No | `ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest` | Image used by `docker compose pull` and `docker compose up`. |
 | `MEDIA_ROOT` | Yes | `/mnt/data` | Host media directory mounted as `/media`. |
 | `BAZARR_CONFIG_DIR` | Yes | `/opt/docker/bazarr/config` | Host Bazarr config directory. |
 | `BAZARR_POSTPROCESS_DIR` | Yes | `/opt/docker/bazarr/postprocess` | Shared post-processing and queue directory. |
@@ -25,6 +26,77 @@ Copy `.env.example` to `.env` and edit values for your host.
 
 The Docker web port is fixed as `6789:6789` in `docker-compose.yml` so the
 container listen port and host port stay aligned.
+
+`MEDIA_ROOT`, `BAZARR_CONFIG_DIR`, `BAZARR_POSTPROCESS_DIR`, and
+`WORKER_STATE_DIR` are host paths. The container sees them as `/media`,
+`/bazarr-config`, `/bazarr-postprocess`, and `/state`.
+
+## Container Runtime Variables
+
+These variables are set by `docker-compose.yml` and normally do not need to be
+changed. If you use `docker run`, pass the same values explicitly.
+
+| Variable | Default in container | Description |
+| --- | --- | --- |
+| `BAZARR_CONFIG_PATH` | `/bazarr-config/config.yaml` | Bazarr config file used as a fallback source for the Bazarr API key. |
+| `QUEUE_DIR` | `/state/queue` | Queue directory shared with the Bazarr post-processing script. |
+| `STATE_DIR` | `/state` | Base state directory for config, queue, logs, cache, and backups. |
+| `LOG_DIR` | `/state/logs` | Worker log directory. |
+| `APP_CONFIG_PATH` | `/state/config.json` | Web-console app settings file. |
+| `POSTPROCESS_TARGETS_PATH` | `/bazarr-postprocess/targets.json` | Source/target language rules read by the Bazarr enqueue script. |
+| `TMDB_CACHE_PATH` | `/state/cache/tmdb_cache.json` | TMDB metadata cache file. |
+| `WEB_HOST` | `0.0.0.0` | Web console bind address inside the container. |
+| `WEB_PORT` | `6789` | Web console port inside the container. |
+
+Equivalent `docker run` skeleton:
+
+```bash
+docker run -d \
+  --name gemini-srt-translator-bazarr \
+  --restart unless-stopped \
+  -p 6789:6789 \
+  --env-file /opt/docker/gemini-srt-translator-bazarr/.env \
+  -e BAZARR_CONFIG_PATH=/bazarr-config/config.yaml \
+  -e QUEUE_DIR=/state/queue \
+  -e STATE_DIR=/state \
+  -e LOG_DIR=/state/logs \
+  -e APP_CONFIG_PATH=/state/config.json \
+  -e POSTPROCESS_TARGETS_PATH=/bazarr-postprocess/targets.json \
+  -e TMDB_CACHE_PATH=/state/cache/tmdb_cache.json \
+  -e WEB_HOST=0.0.0.0 \
+  -e WEB_PORT=6789 \
+  -v /mnt/data:/media \
+  -v /opt/docker/bazarr/config:/bazarr-config:ro \
+  -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
+  -v /opt/docker/gemini-srt-translator-bazarr/state:/state \
+  -v /opt/docker/bazarr/postprocess/queue:/state/queue \
+  ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
+```
+
+When `BAZARR_URL` points to another container by name, add `--network` so Docker
+DNS can resolve that name. If the worker is not on Bazarr's Docker network, use
+a LAN URL in `BAZARR_URL`.
+
+## Remote Image Updates
+
+The published image is built by GitHub Actions and pushed to GitHub Container
+Registry. Standard update flow:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+For non-Compose deployments:
+
+```bash
+docker pull ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
+docker rm -f gemini-srt-translator-bazarr 2>/dev/null || true
+# run the docker run command again with the same env and volume options
+```
+
+The workflow also publishes immutable `sha-<commit>` tags. Use one of those tags
+instead of `latest` when you want a pinned rollback target.
 
 ## App Settings
 

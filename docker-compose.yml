@@ -6,7 +6,7 @@ services:
       context: .
       args:
         INSTALL_FFMPEG: ${INSTALL_FFMPEG:-false}
-    image: gemini-srt-translator-bazarr:latest
+    image: ${GST_BAZARR_IMAGE:-ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest}
     container_name: gemini-srt-translator-bazarr
     restart: unless-stopped
     labels:

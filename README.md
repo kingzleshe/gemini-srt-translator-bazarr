@@ -69,6 +69,54 @@ Bazarr sees the new local subtitle
 - A Gemini API key for `gemini-srt-translator`.
 - Optional TMDB API key for richer translation context.
 
+## Docker Image
+
+The default image is published to GitHub Container Registry:
+
+```text
+ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
+```
+
+`latest` is rebuilt from the `main` branch by GitHub Actions. After a new image
+is published, update a Docker host with:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+For a direct Docker install without Compose:
+
+```bash
+docker pull ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
+docker rm -f gemini-srt-translator-bazarr 2>/dev/null || true
+docker run -d \
+  --name gemini-srt-translator-bazarr \
+  --restart unless-stopped \
+  -p 6789:6789 \
+  --env-file /opt/docker/gemini-srt-translator-bazarr/.env \
+  -e BAZARR_CONFIG_PATH=/bazarr-config/config.yaml \
+  -e QUEUE_DIR=/state/queue \
+  -e STATE_DIR=/state \
+  -e LOG_DIR=/state/logs \
+  -e APP_CONFIG_PATH=/state/config.json \
+  -e POSTPROCESS_TARGETS_PATH=/bazarr-postprocess/targets.json \
+  -e TMDB_CACHE_PATH=/state/cache/tmdb_cache.json \
+  -e WEB_HOST=0.0.0.0 \
+  -e WEB_PORT=6789 \
+  -v /mnt/data:/media \
+  -v /opt/docker/bazarr/config:/bazarr-config:ro \
+  -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
+  -v /opt/docker/gemini-srt-translator-bazarr/state:/state \
+  -v /opt/docker/bazarr/postprocess/queue:/state/queue \
+  ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
+```
+
+If `BAZARR_URL` uses a container hostname such as `http://bazarr:6767`, attach
+this container to the same Docker network as Bazarr, for example with
+`--network <bazarr-network>`. Otherwise set `BAZARR_URL` to a LAN URL such as
+`http://192.168.1.10:6767`.
+
 ## Quick Start
 
 Clone or copy this project to the Docker host, for example:
@@ -117,8 +165,12 @@ sudo chmod +x /opt/docker/bazarr/postprocess/gst_enqueue.sh
 Start the worker:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
+
+For a local source build instead of the published GHCR image, run
+`docker compose up -d --build`.
 
 Open the console:
 
@@ -166,6 +218,20 @@ tar -czf gemini-srt-translator-bazarr-backup.tgz \
 
 Queue files and logs live under `/state` too, but they are runtime state rather
 than required configuration.
+
+## GitHub Remote Image Builds
+
+The repository includes `.github/workflows/docker-image.yml`. On every push to
+`main`, GitHub Actions builds the Dockerfile and pushes:
+
+- `ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest`
+- `ghcr.io/kingzleshe/gemini-srt-translator-bazarr:sha-<commit>`
+- version tags such as `v1.0.0` when the Git tag matches `v*.*.*`
+
+This keeps deployment simple: push to GitHub, wait for the Docker image workflow
+to finish, then run `docker compose pull && docker compose up -d` on the server.
+If an anonymous `docker pull` is denied after the first publish, open the
+package in GitHub Packages and make the container package public.
 
 ## Bazarr Setup
 

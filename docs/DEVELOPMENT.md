@@ -79,3 +79,5 @@ python worker.py --no-worker --host 127.0.0.1 --port 6789
    ```
 
 5. Tag the release.
+6. Push `main` or a `v*.*.*` tag and verify the `Docker image` GitHub Actions
+   workflow published the GHCR image.
