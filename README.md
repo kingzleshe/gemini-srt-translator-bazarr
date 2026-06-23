@@ -94,7 +94,6 @@ docker run -d \
   --name gemini-srt-translator-bazarr \
   --restart unless-stopped \
   -p 6789:6789 \
-  --env-file /opt/docker/gemini-srt-translator-bazarr/.env \
   -v /mnt/data:/media \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
@@ -106,6 +105,16 @@ docker run -d \
 The container already defaults to `/state`, `/state/queue`,
 `/bazarr-postprocess/targets.json`, and web port `6789`, so the direct
 `docker run` form only needs the host paths and public settings.
+Open `http://<docker-host>:6789/` and enter the Bazarr, Gemini, and TMDB
+settings in the web console.
+
+If you prefer to seed values from a file, create
+`/opt/docker/gemini-srt-translator-bazarr/.env` first, then add this option to
+the `docker run` command:
+
+```bash
+--env-file /opt/docker/gemini-srt-translator-bazarr/.env
+```
 
 If `BAZARR_URL` uses a container hostname such as `http://bazarr:6767`, attach
 this container to the same Docker network as Bazarr, for example with

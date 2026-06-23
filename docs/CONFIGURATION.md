@@ -56,7 +56,6 @@ docker run -d \
   --name gemini-srt-translator-bazarr \
   --restart unless-stopped \
   -p 6789:6789 \
-  --env-file /opt/docker/gemini-srt-translator-bazarr/.env \
   -v /mnt/data:/media \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
@@ -64,6 +63,11 @@ docker run -d \
   -v /opt/docker/bazarr/postprocess/queue:/state/queue \
   ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
 ```
+
+This starts with default settings. Open the web console to enter Bazarr, Gemini,
+and TMDB settings. If you want to preload environment variables, create the env
+file first and add `--env-file /opt/docker/gemini-srt-translator-bazarr/.env`
+to the command.
 
 When `BAZARR_URL` points to another container by name, add `--network` so Docker
 DNS can resolve that name. If the worker is not on Bazarr's Docker network, use
