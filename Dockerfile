@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 LABEL org.opencontainers.image.title="Gemini SRT Translator for Bazarr" \
-      org.opencontainers.image.description="A Bazarr companion app that translates configured source subtitles with GeminiSRTTranslator." \
+      org.opencontainers.image.description="A Bazarr companion app that translates configured source subtitles with gemini-srt-translator." \
       org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONUNBUFFERED=1 \

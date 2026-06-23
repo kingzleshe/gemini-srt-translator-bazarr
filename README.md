@@ -1,7 +1,7 @@
 # Gemini SRT Translator for Bazarr
 
 A small Docker sidecar for Bazarr that turns extracted subtitle files into
-GeminiSRTTranslator jobs.
+gemini-srt-translator jobs.
 
 The worker is designed for media servers where Bazarr can already extract or
 index source subtitles, but the final translated subtitles still need to be
@@ -19,7 +19,7 @@ the matching item again.
   system backups, and logs.
 - Settings page shows configured secrets as `**********` and provides API-key
   test buttons for Bazarr, Gemini, and TMDB.
-- GeminiSRTTranslator options are configurable in the web console, including
+- gemini-srt-translator options are configurable in the web console, including
   model selection from a dropdown, batch size, quota mode, logs, and model
   tuning parameters.
 - Multi-source and multi-target output support, for example `en -> zh`,
@@ -102,7 +102,7 @@ Or open the web console and fill these fields in Settings:
 Secret values are stored in `/state/config.json` and are not returned by the
 public settings API.
 
-GeminiSRTTranslator settings such as model, batch size, paid quota mode,
+gemini-srt-translator settings such as model, batch size, paid quota mode,
 progress/thought logs, and model tuning options are also stored in
 `/state/config.json`.
 
@@ -226,7 +226,7 @@ Movie.zh.srt -> Movie.en.srt
 
 ## Project Status
 
-This project is focused on one workflow: use GeminiSRTTranslator to translate
+This project is focused on one workflow: use gemini-srt-translator to translate
 SRT files that Bazarr can already see or extract. It is not a full
 subtitle provider replacement and it does not install anything inside the Bazarr
 image.

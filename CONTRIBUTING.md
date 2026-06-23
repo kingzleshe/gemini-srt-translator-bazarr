@@ -2,7 +2,7 @@
 
 Contributions are welcome when they keep the project focused on the core
 workflow: Bazarr discovers or extracts English SRT files, this worker translates
-them with GeminiSRTTranslator, and Bazarr indexes the generated target subtitles.
+them with gemini-srt-translator, and Bazarr indexes the generated target subtitles.
 
 ## Before Opening a Pull Request
 
@@ -33,7 +33,7 @@ Good fits:
 Out of scope unless discussed first:
 
 - replacing Bazarr;
-- replacing GeminiSRTTranslator with another translation engine;
+- replacing gemini-srt-translator with another translation engine;
 - installing packages inside the Bazarr container;
 - background scanning that constantly walks large media libraries by default.
 

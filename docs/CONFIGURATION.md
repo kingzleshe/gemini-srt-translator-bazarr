@@ -84,7 +84,7 @@ The public settings API returns configured secrets as `**********` plus
 `*_configured` booleans, never the stored secret values. Saving `**********`
 keeps the existing secret.
 
-## GeminiSRTTranslator Options
+## gemini-srt-translator Options
 
 The Settings page writes these `gst translate` options into app config:
 
@@ -143,7 +143,7 @@ state, not required configuration.
 The settings page loads source and target choices from Bazarr's
 `/api/system/languages` endpoint.
 
-`code` controls filenames. `language` is passed to GeminiSRTTranslator.
+`code` controls filenames. `language` is passed to gemini-srt-translator.
 
 Output examples:
 

@@ -9,7 +9,7 @@ versioning once tagged releases begin.
 
 ### Added
 
-- Docker sidecar worker for Bazarr and GeminiSRTTranslator.
+- Docker sidecar worker for Bazarr and gemini-srt-translator.
 - Bazarr post-processing enqueue script.
 - Web console for status, wanted items, local scans, queue, settings, and logs.
 - Multi-target-language queue support.
@@ -17,8 +17,8 @@ versioning once tagged releases begin.
 - System backups page with server-side backup creation and listing.
 - Automatic scheduled backups every 7 days with 30-day backup retention.
 - API key masking and connection test buttons for Bazarr, Gemini, and TMDB.
-- Gemini model dropdown and GeminiSRTTranslator CLI settings in the web console.
-- Recommended GeminiSRTTranslator tuning defaults for automated subtitle
+- Gemini model dropdown and gemini-srt-translator CLI settings in the web console.
+- Recommended gemini-srt-translator tuning defaults for automated subtitle
   translation.
 - Configurable 10-minute default queue settle window to avoid translating while
   Bazarr is still extracting target-language embedded subtitles.
