@@ -99,7 +99,7 @@ docker run -d \
   -v /mnt/data:/media \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
-  -v /opt/docker/gemini-srt-translator-bazarr/state:/state \
+  -v /opt/docker/gemini-srt-translator-bazarr:/state \
   -v /opt/docker/bazarr/postprocess/queue:/state/queue \
   ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
 ```
@@ -197,7 +197,7 @@ Backups` flow. It also creates a scheduled backup every 7 days and removes
 backup archives older than 30 days. Backup archives are written to:
 
 ```text
-/opt/docker/gemini-srt-translator-bazarr/state/backups
+/opt/docker/gemini-srt-translator-bazarr/backups
 ```
 
 They include:
@@ -218,7 +218,7 @@ is not mounted inside the worker container:
 ```bash
 tar -czf gemini-srt-translator-bazarr-backup.tgz \
   /opt/docker/gemini-srt-translator-bazarr/.env \
-  /opt/docker/gemini-srt-translator-bazarr/state/config.json \
+  /opt/docker/gemini-srt-translator-bazarr/config.json \
   /opt/docker/bazarr/postprocess/targets.json
 ```
 

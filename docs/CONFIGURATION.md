@@ -17,7 +17,7 @@ Copy `.env.example` to `.env` and edit values for your host.
 | `MEDIA_ROOT` | Yes | `/mnt/data` | Host media directory mounted as `/media`. |
 | `BAZARR_CONFIG_DIR` | Yes | `/opt/docker/bazarr/config` | Host Bazarr config directory. |
 | `BAZARR_POSTPROCESS_DIR` | Yes | `/opt/docker/bazarr/postprocess` | Shared post-processing and queue directory. |
-| `WORKER_STATE_DIR` | Yes | `/opt/docker/gemini-srt-translator-bazarr/state` | Worker state, config, logs, and cache. |
+| `WORKER_STATE_DIR` | Yes | `/opt/docker/gemini-srt-translator-bazarr` | Worker state, config, logs, and cache. |
 | `GST_MODEL` | No | `gemini-flash-latest` | Model passed to `gst translate --model`. |
 | `GST_BATCH_SIZE` | No | `1000` | Batch size passed to `gst translate --batch-size`. |
 | `GST_TARGET_LANGUAGE` | No | `Simplified Chinese` | Legacy fallback when a job has no target language. |
@@ -59,7 +59,7 @@ docker run -d \
   -v /mnt/data:/media \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
-  -v /opt/docker/gemini-srt-translator-bazarr/state:/state \
+  -v /opt/docker/gemini-srt-translator-bazarr:/state \
   -v /opt/docker/bazarr/postprocess/queue:/state/queue \
   ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
 ```
@@ -181,7 +181,7 @@ scheduled backup every 7 days and deletes backup zip files older than 30 days.
 It writes zip archives to:
 
 ```text
-/opt/docker/gemini-srt-translator-bazarr/state/backups
+/opt/docker/gemini-srt-translator-bazarr/backups
 ```
 
 Each zip contains:
@@ -201,9 +201,9 @@ For a full personal deployment backup, also back up:
 
 ```bash
 /opt/docker/gemini-srt-translator-bazarr/.env
-/opt/docker/gemini-srt-translator-bazarr/state/config.json
+/opt/docker/gemini-srt-translator-bazarr/config.json
 /opt/docker/bazarr/postprocess/targets.json
-/opt/docker/gemini-srt-translator-bazarr/state/backups
+/opt/docker/gemini-srt-translator-bazarr/backups
 ```
 
 `/state/logs` and `/state/queue` are useful for troubleshooting but are runtime

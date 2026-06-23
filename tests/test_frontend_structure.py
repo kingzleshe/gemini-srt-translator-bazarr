@@ -96,6 +96,15 @@ class DeploymentConfigTests(unittest.TestCase):
         self.assertIn('os.getenv("WEB_PORT", "6789")', worker_py)
         self.assertNotIn(":8080", compose)
 
+    def test_default_state_dir_mounts_project_root_not_nested_state_dir(self):
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+        self.assertIn("${WORKER_STATE_DIR:-/opt/docker/gemini-srt-translator-bazarr}:/state", compose)
+        self.assertNotIn("${WORKER_STATE_DIR:-/opt/docker/gemini-srt-translator-bazarr/state}:/state", compose)
+        self.assertIn("WORKER_STATE_DIR=/opt/docker/gemini-srt-translator-bazarr", env_example)
+        self.assertNotIn("WORKER_STATE_DIR=/opt/docker/gemini-srt-translator-bazarr/state", env_example)
+
 
 if __name__ == "__main__":
     unittest.main()
