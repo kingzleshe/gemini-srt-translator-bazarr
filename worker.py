@@ -567,7 +567,7 @@ def main() -> int:
     args = parser.parse_args()
 
     state_dir = os.getenv("STATE_DIR", "/state")
-    queue_dir = os.getenv("QUEUE_DIR", f"{state_dir}/queue")
+    queue_dir = os.getenv("QUEUE_DIR", "/queue")
     log_dir = os.getenv("LOG_DIR", f"{state_dir}/logs")
     config_path = os.getenv("APP_CONFIG_PATH", f"{state_dir}/config.json")
     postprocess_targets_path = os.getenv("POSTPROCESS_TARGETS_PATH", "/bazarr-postprocess/targets.json")

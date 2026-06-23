@@ -107,11 +107,13 @@ class DeploymentConfigTests(unittest.TestCase):
 
     def test_queue_mount_is_outside_worker_state_mount(self):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        worker_py = (ROOT / "worker.py").read_text(encoding="utf-8")
 
         self.assertIn("QUEUE_DIR: /queue", compose)
         self.assertIn("${BAZARR_POSTPROCESS_DIR:-/opt/docker/bazarr/postprocess}/queue:/queue", compose)
         self.assertNotIn("QUEUE_DIR: /state/queue", compose)
         self.assertNotIn(":/state/queue", compose)
+        self.assertIn('os.getenv("QUEUE_DIR", "/queue")', worker_py)
 
 
 if __name__ == "__main__":
