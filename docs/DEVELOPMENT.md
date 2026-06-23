@@ -2,7 +2,8 @@
 
 ## Local Setup
 
-Use Python 3.12 or newer.
+Use Python 3.14 for parity with the Docker image. Python 3.12 or newer should
+still work for local development.
 
 ```bash
 python -m venv .venv
