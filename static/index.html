@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gemini SRT Translator for Bazarr</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">GS</span>
+      <span>GST Bazarr</span>
+    </div>
+    <nav>
+      <button class="nav active" data-view="dashboard">Dashboard</button>
+      <button class="nav" data-view="wanted">Wanted</button>
+      <button class="nav" data-view="scan">Scan</button>
+      <button class="nav" data-view="queue">Queue</button>
+      <button class="nav" data-view="settings">Settings</button>
+      <button class="nav" data-view="system">System</button>
+      <button class="nav" data-view="logs">Logs</button>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="view-title">Dashboard</h1>
+        <p id="view-subtitle">Bazarr source subtitles to Gemini translated targets.</p>
+      </div>
+      <button id="refresh" class="primary">Refresh</button>
+    </header>
+
+    <section id="dashboard" class="view active">
+      <div class="metrics">
+        <div class="metric"><span>Pending</span><strong id="metric-pending">0</strong></div>
+        <div class="metric"><span>Processing</span><strong id="metric-processing">0</strong></div>
+        <div class="metric"><span>Done</span><strong id="metric-done">0</strong></div>
+        <div class="metric danger"><span>Failed</span><strong id="metric-failed">0</strong></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Targets</h2>
+        </div>
+        <div class="dashboard-languages">
+          <div>
+            <div class="section-label">Sources</div>
+            <div id="source-list" class="chips"></div>
+          </div>
+          <div>
+            <div class="section-label">Targets</div>
+            <div id="target-list" class="chips"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="wanted" class="view">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Bazarr Wanted</h2>
+          <button id="load-wanted">Load Wanted</button>
+        </div>
+        <div id="wanted-list" class="table"></div>
+      </div>
+    </section>
+
+    <section id="scan" class="view">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Local Source Subtitles</h2>
+          <div class="actions">
+            <button id="load-scan">Scan</button>
+            <button id="enqueue-scan" class="primary">Enqueue All</button>
+          </div>
+        </div>
+        <div id="scan-list" class="table"></div>
+      </div>
+    </section>
+
+    <section id="queue" class="view">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Queue</h2>
+        </div>
+        <div id="queue-list" class="queue-grid"></div>
+      </div>
+    </section>
+
+    <section id="settings" class="view">
+      <div class="panel settings-panel">
+        <div class="panel-head">
+          <h2>Settings</h2>
+          <button id="save-settings" class="primary">Save</button>
+        </div>
+        <label>
+          Bazarr URL
+          <input id="bazarr-url-input" type="url" spellcheck="false" placeholder="http://bazarr:6767">
+        </label>
+        <label>
+          Bazarr API key
+          <div class="secret-field">
+            <input id="bazarr-api-key-input" type="password" spellcheck="false" autocomplete="off">
+            <button id="test-bazarr-key" type="button">Test</button>
+          </div>
+          <span id="bazarr-key-status" class="field-note"></span>
+        </label>
+        <label>
+          Gemini API key 1
+          <div class="secret-field">
+            <input id="gemini-api-key-input" type="password" spellcheck="false" autocomplete="off">
+            <button id="test-gemini-key" type="button">Test</button>
+          </div>
+          <span id="gemini-key-status" class="field-note"></span>
+        </label>
+        <label>
+          Gemini API key 2
+          <div class="secret-field">
+            <input id="gemini-api-key2-input" type="password" spellcheck="false" autocomplete="off">
+            <button id="test-gemini-key2" type="button">Test</button>
+          </div>
+          <span id="gemini-key2-status" class="field-note"></span>
+        </label>
+        <label>
+          TMDB API key
+          <div class="secret-field">
+            <input id="tmdb-api-key-input" type="password" spellcheck="false" autocomplete="off">
+            <button id="test-tmdb-key" type="button">Test</button>
+          </div>
+          <span id="tmdb-key-status" class="field-note"></span>
+        </label>
+        <div class="settings-section">
+          <h3>GeminiSRTTranslator</h3>
+          <label>
+            Model
+            <select id="gst-model-select"></select>
+          </label>
+          <label class="inline-field">
+            Batch size
+            <input id="gst-batch-size-input" type="number" min="1" max="10000">
+          </label>
+          <label class="inline-field">
+            Queue settle seconds
+            <input id="job-settle-seconds-input" type="number" min="0" max="3600">
+          </label>
+          <div class="setting-grid">
+            <label class="check-field"><input id="gst-paid-quota-input" type="checkbox"> Paid quota</label>
+            <label class="check-field"><input id="gst-skip-upgrade-input" type="checkbox"> Skip upgrade check</label>
+            <label class="check-field"><input id="gst-quiet-input" type="checkbox"> Quiet output</label>
+            <label class="check-field"><input id="gst-progress-log-input" type="checkbox"> Progress log</label>
+            <label class="check-field"><input id="gst-thoughts-log-input" type="checkbox"> Thoughts log</label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Model Tuning</h3>
+          <div class="tuning-grid">
+            <label>Temperature<input id="gst-temperature-input" type="number" min="0" max="2" step="0.01"></label>
+            <label>Top P<input id="gst-top-p-input" type="number" min="0" max="1" step="0.01"></label>
+            <label>Top K<input id="gst-top-k-input" type="number" min="0" step="1"></label>
+            <label>Thinking budget<input id="gst-thinking-budget-input" type="number" min="0" max="32768" step="1"></label>
+            <label>
+              Thinking level
+              <select id="gst-thinking-level-select">
+                <option value="">Default</option>
+                <option value="minimal">minimal</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+          </div>
+          <div class="setting-grid">
+            <label class="check-field"><input id="gst-no-streaming-input" type="checkbox"> Disable streaming</label>
+            <label class="check-field"><input id="gst-no-thinking-input" type="checkbox"> Disable thinking</label>
+            <label class="check-field"><input id="gst-no-context-input" type="checkbox"> Disable batch context</label>
+          </div>
+        </div>
+        <label>
+          Source languages
+          <div class="language-picker">
+            <select id="source-language-select"></select>
+            <button id="add-source-language" type="button">Add</button>
+          </div>
+          <div id="selected-source-languages" class="selected-languages"></div>
+        </label>
+        <label>
+          Target languages
+          <div class="language-picker">
+            <select id="target-language-select"></select>
+            <button id="add-target-language" type="button">Add</button>
+          </div>
+          <div id="selected-target-languages" class="selected-languages"></div>
+        </label>
+        <label>
+          Media roots
+          <textarea id="roots-input" spellcheck="false"></textarea>
+        </label>
+        <label class="inline-field">
+          Scan limit
+          <input id="scan-limit-input" type="number" min="1" max="5000">
+        </label>
+      </div>
+    </section>
+
+    <section id="system" class="view">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Backups</h2>
+          <button id="create-backup" type="button" class="primary">Backup Now</button>
+        </div>
+        <div class="backup-import">
+          <input id="backup-file-input" type="file" accept=".zip,application/zip">
+          <button id="import-backup" type="button">Import Backup</button>
+          <div class="field-note">Import restores app settings and post-processing targets. A pre-import backup is created first.</div>
+        </div>
+        <div id="backup-list" class="backup-list"></div>
+      </div>
+    </section>
+
+    <section id="logs" class="view">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Logs</h2>
+          <button id="clear-logs" type="button">Clear</button>
+        </div>
+        <pre id="log-output"></pre>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+gemini-srt-translator==3.5.6

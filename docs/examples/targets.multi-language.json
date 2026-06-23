@@ -1,0 +1,17 @@
+[
+  {
+    "code": "zh",
+    "language": "Simplified Chinese",
+    "enabled": true
+  },
+  {
+    "code": "zt",
+    "language": "Traditional Chinese",
+    "enabled": true
+  },
+  {
+    "code": "ja",
+    "language": "Japanese",
+    "enabled": true
+  }
+]

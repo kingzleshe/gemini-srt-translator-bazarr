@@ -1,0 +1,47 @@
+name: gemini-srt-translator-bazarr
+
+services:
+  gemini-srt-translator-bazarr:
+    build:
+      context: .
+      args:
+        INSTALL_FFMPEG: ${INSTALL_FFMPEG:-false}
+    image: gemini-srt-translator-bazarr:latest
+    container_name: gemini-srt-translator-bazarr
+    restart: unless-stopped
+    labels:
+      org.opencontainers.image.title: "Gemini SRT Translator for Bazarr"
+      org.opencontainers.image.description: "A Bazarr companion app that translates configured source subtitles with GeminiSRTTranslator."
+      org.opencontainers.image.licenses: "MIT"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_KEY1: ${GEMINI_API_KEY1:-}
+      GEMINI_API_KEY2: ${GEMINI_API_KEY2:-}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      BAZARR_URL: ${BAZARR_URL:-http://bazarr:6767}
+      BAZARR_API_KEY: ${BAZARR_API_KEY:-}
+      GST_MODEL: ${GST_MODEL:-gemini-flash-latest}
+      GST_BATCH_SIZE: ${GST_BATCH_SIZE:-1000}
+      GST_TARGET_LANGUAGE: ${GST_TARGET_LANGUAGE:-Simplified Chinese}
+      WORKER_SLEEP_SECONDS: ${WORKER_SLEEP_SECONDS:-15}
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-20}
+      BAZARR_CONFIG_PATH: /bazarr-config/config.yaml
+      QUEUE_DIR: /state/queue
+      STATE_DIR: /state
+      LOG_DIR: /state/logs
+      APP_CONFIG_PATH: /state/config.json
+      POSTPROCESS_TARGETS_PATH: /bazarr-postprocess/targets.json
+      TMDB_CACHE_PATH: /state/cache/tmdb_cache.json
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: 6789
+    ports:
+      - 6789:6789
+    volumes:
+      - ${MEDIA_ROOT:-/mnt/data}:/media
+      - ${BAZARR_CONFIG_DIR:-/opt/docker/bazarr/config}:/bazarr-config:ro
+      - ${BAZARR_POSTPROCESS_DIR:-/opt/docker/bazarr/postprocess}:/bazarr-postprocess
+      - ${WORKER_STATE_DIR:-/opt/docker/gemini-srt-translator-bazarr/state}:/state
+      - ${BAZARR_POSTPROCESS_DIR:-/opt/docker/bazarr/postprocess}/queue:/state/queue

@@ -1,0 +1,172 @@
+# Configuration
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and edit values for your host.
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `GEMINI_API_KEY` | No | empty | Primary Gemini API key used by `gemini-srt-translator`; can also be set in the web console. |
+| `GEMINI_API_KEY1` | No | empty | Alias for the primary Gemini key. |
+| `GEMINI_API_KEY2` | No | empty | Optional second key passed through to `gemini-srt-translator`. |
+| `TMDB_API_KEY` | No | empty | Used to build movie/show/episode descriptions; can also be set in the web console. |
+| `BAZARR_URL` | Yes | `http://bazarr:6767` | Bazarr base URL from inside the worker container. |
+| `BAZARR_API_KEY` | No | empty | If empty, the worker tries app settings, then Bazarr `config.yaml`. |
+| `INSTALL_FFMPEG` | No | `false` | Optional image build flag. Leave false when Bazarr extracts subtitles. |
+| `MEDIA_ROOT` | Yes | `/mnt/data` | Host media directory mounted as `/media`. |
+| `BAZARR_CONFIG_DIR` | Yes | `/opt/docker/bazarr/config` | Host Bazarr config directory. |
+| `BAZARR_POSTPROCESS_DIR` | Yes | `/opt/docker/bazarr/postprocess` | Shared post-processing and queue directory. |
+| `WORKER_STATE_DIR` | Yes | `/opt/docker/gemini-srt-translator-bazarr/state` | Worker state, config, logs, and cache. |
+| `GST_MODEL` | No | `gemini-flash-latest` | Model passed to `gst translate --model`. |
+| `GST_BATCH_SIZE` | No | `1000` | Batch size passed to `gst translate --batch-size`. |
+| `GST_TARGET_LANGUAGE` | No | `Simplified Chinese` | Legacy fallback when a job has no target language. |
+| `WORKER_SLEEP_SECONDS` | No | `15` | Delay between queue polling cycles. |
+| `HTTP_TIMEOUT_SECONDS` | No | `20` | Timeout for Bazarr and TMDB HTTP calls. |
+
+The Docker web port is fixed as `6789:6789` in `docker-compose.yml` so the
+container listen port and host port stay aligned.
+
+## App Settings
+
+The web console writes app settings to:
+
+```text
+/state/config.json
+```
+
+Default:
+
+```json
+{
+  "source_languages": [
+    {"code": "en", "language": "English", "enabled": true}
+  ],
+  "target_languages": [
+    {"code": "zh", "language": "Simplified Chinese", "enabled": true}
+  ],
+  "media_roots": ["/media"],
+  "scan_limit": 200,
+  "bazarr_url": "",
+  "bazarr_api_key": "",
+  "gemini_api_key": "",
+  "gemini_api_key2": "",
+  "tmdb_api_key": "",
+  "gst_model": "gemini-flash-latest",
+  "gst_batch_size": 1000,
+  "gst_paid_quota": false,
+  "gst_skip_upgrade": true,
+  "gst_quiet": true,
+  "gst_progress_log": false,
+  "gst_thoughts_log": false,
+  "gst_temperature": "0.7",
+  "gst_top_p": "0.95",
+  "gst_top_k": "40",
+  "gst_thinking_budget": "2048",
+  "gst_thinking_level": "medium",
+  "gst_no_streaming": true,
+  "gst_no_thinking": false,
+  "gst_no_context": false,
+  "job_settle_seconds": 600
+}
+```
+
+When settings are saved, enabled source and target languages are also written to:
+
+```text
+/bazarr-postprocess/targets.json
+```
+
+That file is read by Bazarr's post-processing script, so automatic Bazarr events
+and manual console jobs use the same translation language rules.
+
+Secrets are stored in `/state/config.json` if configured from the web console.
+The public settings API returns configured secrets as `**********` plus
+`*_configured` booleans, never the stored secret values. Saving `**********`
+keeps the existing secret.
+
+## GeminiSRTTranslator Options
+
+The Settings page writes these `gst translate` options into app config:
+
+- `gst_model`: selected from `/api/gemini-models`; passed to `--model`.
+- `gst_batch_size`: passed to `--batch-size`.
+- `gst_paid_quota`: enables `--paid-quota`.
+- `gst_skip_upgrade`: enables `--skip-upgrade`.
+- `gst_quiet`: enables `--quiet`.
+- `gst_progress_log`: enables `--progress-log`.
+- `gst_thoughts_log`: enables `--thoughts-log`.
+- `gst_temperature`, `gst_top_p`, `gst_top_k`: model tuning values.
+- `gst_thinking_budget`, `gst_thinking_level`: thinking controls.
+- `gst_no_streaming`, `gst_no_thinking`, `gst_no_context`: boolean CLI
+  switches.
+- `job_settle_seconds`: queue settle window before a new job can run. Default
+  is `600` seconds so Bazarr has time to finish extracting other embedded
+  subtitles from the same media file.
+
+## Backup
+
+The web console has a manual `Backup Now` action. The worker also creates a
+scheduled backup every 7 days and deletes backup zip files older than 30 days.
+It writes zip archives to:
+
+```text
+/opt/docker/gemini-srt-translator-bazarr/state/backups
+```
+
+Each zip contains:
+
+```text
+backup.json
+config/config.json
+postprocess/targets.json
+```
+
+`config/config.json` can contain Bazarr, Gemini, and TMDB secrets. The UI can
+download backup zip files and import a selected backup zip. Import restores only
+`config/config.json` and `postprocess/targets.json`; it creates a `pre-import`
+backup first and does not restore queue files, logs, or caches.
+
+For a full personal deployment backup, also back up:
+
+```bash
+/opt/docker/gemini-srt-translator-bazarr/.env
+/opt/docker/gemini-srt-translator-bazarr/state/config.json
+/opt/docker/bazarr/postprocess/targets.json
+/opt/docker/gemini-srt-translator-bazarr/state/backups
+```
+
+`/state/logs` and `/state/queue` are useful for troubleshooting but are runtime
+state, not required configuration.
+
+## Languages
+
+The settings page loads source and target choices from Bazarr's
+`/api/system/languages` endpoint.
+
+`code` controls filenames. `language` is passed to GeminiSRTTranslator.
+
+Output examples:
+
+```text
+Episode.en.srt -> Episode.zh.srt
+Episode.ja.srt -> Episode.zh.srt
+Episode.zh.srt -> Episode.en.srt
+```
+
+## Command-Line Modes
+
+The default command starts both the web console and the worker loop:
+
+```bash
+python /app/worker.py
+```
+
+Other modes:
+
+```bash
+python /app/worker.py --once
+python /app/worker.py --worker-only
+python /app/worker.py --no-worker
+```
+
+`--once` is useful for tests or one-shot cron-style operation.

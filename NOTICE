@@ -1,0 +1,18 @@
+Gemini SRT Translator for Bazarr
+
+This project is an independent Bazarr companion application. It is not
+affiliated with, endorsed by, or maintained by Bazarr, Sonarr, Radarr, TMDB, or
+Google.
+
+Runtime translation is performed by the gemini-srt-translator package and its
+`gst` CLI:
+https://github.com/MaKTaiL/gemini-srt-translator
+
+gemini-srt-translator is licensed separately by its upstream authors. This
+repository does not vendor or redistribute the upstream source code.
+
+Bazarr is used through its documented post-processing support and HTTP API:
+https://www.bazarr.media/
+
+TMDB metadata is optional and is used only to build better translation
+descriptions. Users are responsible for complying with TMDB API terms.
