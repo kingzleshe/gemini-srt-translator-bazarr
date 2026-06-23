@@ -33,8 +33,9 @@ container listen port and host port stay aligned.
 
 ## Container Runtime Variables
 
-These variables are set by `docker-compose.yml` and normally do not need to be
-changed. If you use `docker run`, pass the same values explicitly.
+These variables have container-safe defaults and normally do not need to be set,
+including with direct `docker run`. Override them only when you intentionally
+change the container paths or web bind address.
 
 | Variable | Default in container | Description |
 | --- | --- | --- |
@@ -56,15 +57,6 @@ docker run -d \
   --restart unless-stopped \
   -p 6789:6789 \
   --env-file /opt/docker/gemini-srt-translator-bazarr/.env \
-  -e BAZARR_CONFIG_PATH=/bazarr-config/config.yaml \
-  -e QUEUE_DIR=/state/queue \
-  -e STATE_DIR=/state \
-  -e LOG_DIR=/state/logs \
-  -e APP_CONFIG_PATH=/state/config.json \
-  -e POSTPROCESS_TARGETS_PATH=/bazarr-postprocess/targets.json \
-  -e TMDB_CACHE_PATH=/state/cache/tmdb_cache.json \
-  -e WEB_HOST=0.0.0.0 \
-  -e WEB_PORT=6789 \
   -v /mnt/data:/media \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \

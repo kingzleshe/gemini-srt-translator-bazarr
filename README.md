@@ -95,15 +95,6 @@ docker run -d \
   --restart unless-stopped \
   -p 6789:6789 \
   --env-file /opt/docker/gemini-srt-translator-bazarr/.env \
-  -e BAZARR_CONFIG_PATH=/bazarr-config/config.yaml \
-  -e QUEUE_DIR=/state/queue \
-  -e STATE_DIR=/state \
-  -e LOG_DIR=/state/logs \
-  -e APP_CONFIG_PATH=/state/config.json \
-  -e POSTPROCESS_TARGETS_PATH=/bazarr-postprocess/targets.json \
-  -e TMDB_CACHE_PATH=/state/cache/tmdb_cache.json \
-  -e WEB_HOST=0.0.0.0 \
-  -e WEB_PORT=6789 \
   -v /mnt/data:/media \
   -v /opt/docker/bazarr/config:/bazarr-config:ro \
   -v /opt/docker/bazarr/postprocess:/bazarr-postprocess \
@@ -111,6 +102,10 @@ docker run -d \
   -v /opt/docker/bazarr/postprocess/queue:/state/queue \
   ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest
 ```
+
+The container already defaults to `/state`, `/state/queue`,
+`/bazarr-postprocess/targets.json`, and web port `6789`, so the direct
+`docker run` form only needs the host paths and public settings.
 
 If `BAZARR_URL` uses a container hostname such as `http://bazarr:6767`, attach
 this container to the same Docker network as Bazarr, for example with
