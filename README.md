@@ -225,22 +225,6 @@ tar -czf gemini-srt-translator-bazarr-backup.tgz \
 Queue files and logs live under `/state` too, but they are runtime state rather
 than required configuration.
 
-## GitHub Remote Image Builds
-
-The repository includes `.github/workflows/docker-image.yml`. On every push to
-`main`, GitHub Actions builds the Dockerfile and pushes:
-
-- `ghcr.io/kingzleshe/gemini-srt-translator-bazarr:latest`
-- `ghcr.io/kingzleshe/gemini-srt-translator-bazarr:sha-<commit>`
-- version tags such as `v1.0.0` when the Git tag matches `v*.*.*`
-
-This keeps deployment simple: push code that affects the image, wait for the
-Docker image workflow to finish, then run
-`docker compose pull && docker compose up -d` on the server. Documentation-only
-changes do not rebuild the image. If an anonymous `docker pull` is denied after
-the first publish, open the package in GitHub Packages and make the container
-package public.
-
 ## Bazarr Setup
 
 In Bazarr, enable `Settings -> Subtitles -> Use Custom Post-Processing` and use
