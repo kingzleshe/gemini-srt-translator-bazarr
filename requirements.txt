@@ -1,1 +1,1 @@
-gemini-srt-translator==3.5.7
+gemini-srt-translator==3.5.8
