@@ -93,9 +93,6 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, s
     temp_output = output_path.with_name(f"{output_path.stem}.partial.srt")
     if temp_output.exists():
         temp_output.unlink()
-    progress_path = Path(input_srt).with_suffix(".progress")
-    if progress_path.exists():
-        progress_path.unlink()
 
     command = build_gst_command(
         input_srt,
@@ -108,11 +105,6 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, s
     result = subprocess.run(command, text=True, capture_output=True, check=False, env=translation_environment(settings))
     if result.returncode != 0:
         raise RuntimeError(f"gst failed with exit {result.returncode}: {result.stderr[-1000:]}")
-    if progress_path.exists():
-        if temp_output.exists():
-            temp_output.unlink()
-        details = f"{getattr(result, 'stderr', '')}\n{getattr(result, 'stdout', '')}".strip()
-        raise RuntimeError(f"gst exited successfully but left a progress file: {progress_path}: {details[-1000:]}")
     if not temp_output.exists() or temp_output.stat().st_size == 0:
         raise RuntimeError(f"gst did not create a non-empty output file: {temp_output}")
 

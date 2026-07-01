@@ -19,8 +19,8 @@ versioning once tagged releases begin.
 - API key masking and connection test buttons for Bazarr, Gemini, and TMDB.
 - Gemini model dropdown and gemini-srt-translator CLI settings in the web console.
 - Token report setting for gemini-srt-translator 3.5.7 `--token-report`.
-- gemini-srt-translator 3.5.8 dependency update for upstream package upgrade
-  fixes.
+- gemini-srt-translator 3.5.9 dependency update for upstream FFmpeg handling
+  and interrupted-translation exit-code fixes.
 - Recommended gemini-srt-translator tuning defaults for automated subtitle
   translation.
 - Configurable 10-minute default queue settle window to avoid translating while

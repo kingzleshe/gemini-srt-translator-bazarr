@@ -818,35 +818,6 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(output.read_text(encoding="utf-8"), "embedded zh subtitle")
             self.assertFalse((root / "Movie.zh.partial.srt").exists())
 
-    def test_run_translation_rejects_successful_gst_when_progress_file_remains(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            subtitle = root / "Movie.en.srt"
-            output = root / "Movie.zh.srt"
-            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
-
-            def fake_run(command, **kwargs):
-                temp_output = Path(command[command.index("-o") + 1])
-                temp_output.write_text("partial translation", encoding="utf-8")
-                subtitle.with_suffix(".progress").write_text("interrupted", encoding="utf-8")
-                return type("Result", (), {"returncode": 0, "stderr": "", "stdout": "saved progress"})()
-
-            with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                with self.assertRaisesRegex(RuntimeError, "left a progress file"):
-                    worker.run_translation(
-                        {
-                            "subtitle_path": str(subtitle),
-                            "output_path": str(output),
-                            "target_code": "zh",
-                            "target_language": "Simplified Chinese",
-                        },
-                        "",
-                        {"gemini_api_key": "secret"},
-                    )
-
-            self.assertFalse(output.exists())
-            self.assertFalse((root / "Movie.zh.partial.srt").exists())
-
     def test_scan_source_subtitles_finds_missing_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
