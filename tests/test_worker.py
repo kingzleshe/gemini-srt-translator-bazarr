@@ -818,6 +818,35 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(output.read_text(encoding="utf-8"), "embedded zh subtitle")
             self.assertFalse((root / "Movie.zh.partial.srt").exists())
 
+    def test_run_translation_rejects_successful_gst_when_progress_file_remains(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+
+            def fake_run(command, **kwargs):
+                temp_output = Path(command[command.index("-o") + 1])
+                temp_output.write_text("partial translation", encoding="utf-8")
+                subtitle.with_suffix(".progress").write_text("interrupted", encoding="utf-8")
+                return type("Result", (), {"returncode": 0, "stderr": "", "stdout": "saved progress"})()
+
+            with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
+                with self.assertRaisesRegex(RuntimeError, "left a progress file"):
+                    worker.run_translation(
+                        {
+                            "subtitle_path": str(subtitle),
+                            "output_path": str(output),
+                            "target_code": "zh",
+                            "target_language": "Simplified Chinese",
+                        },
+                        "",
+                        {"gemini_api_key": "secret"},
+                    )
+
+            self.assertFalse(output.exists())
+            self.assertFalse((root / "Movie.zh.partial.srt").exists())
+
     def test_scan_source_subtitles_finds_missing_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -991,9 +1020,36 @@ class WorkerTests(unittest.TestCase):
         self.assertIn("--top-p", command)
         self.assertIn("--top-k", command)
         self.assertIn("--thinking-budget", command)
-        self.assertIn("--thinking-level", command)
+        self.assertNotIn("--thinking-level", command)
         self.assertNotIn("--skip-upgrade", command)
         self.assertNotIn("--quiet", command)
+
+    def test_build_gst_command_uses_one_thinking_option_when_both_are_configured(self):
+        flash_25_command = worker.build_gst_command(
+            "/media/Movie.en.srt",
+            "/media/Movie.zh.srt",
+            "",
+            gst_settings={
+                "gst_model": "gemini-2.5-flash",
+                "gst_thinking_budget": "2048",
+                "gst_thinking_level": "medium",
+            },
+        )
+        flash_latest_command = worker.build_gst_command(
+            "/media/Movie.en.srt",
+            "/media/Movie.zh.srt",
+            "",
+            gst_settings={
+                "gst_model": "gemini-flash-latest",
+                "gst_thinking_budget": "2048",
+                "gst_thinking_level": "medium",
+            },
+        )
+
+        self.assertIn("--thinking-budget", flash_25_command)
+        self.assertNotIn("--thinking-level", flash_25_command)
+        self.assertNotIn("--thinking-budget", flash_latest_command)
+        self.assertIn("--thinking-level", flash_latest_command)
 
 
 if __name__ == "__main__":

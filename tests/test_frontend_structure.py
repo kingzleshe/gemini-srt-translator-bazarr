@@ -115,6 +115,16 @@ class DeploymentConfigTests(unittest.TestCase):
         self.assertNotIn(":/state/queue", compose)
         self.assertIn('os.getenv("QUEUE_DIR", "/queue")', worker_py)
 
+    def test_docker_build_installs_ffmpeg_by_default(self):
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+        self.assertIn("ARG INSTALL_FFMPEG=true", dockerfile)
+        self.assertIn("apt-get install -y --no-install-recommends ffmpeg", dockerfile)
+        self.assertIn("INSTALL_FFMPEG: ${INSTALL_FFMPEG:-true}", compose)
+        self.assertIn("INSTALL_FFMPEG=true", env_example)
+
 
 if __name__ == "__main__":
     unittest.main()

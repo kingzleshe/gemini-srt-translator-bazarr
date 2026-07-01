@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-ARG INSTALL_FFMPEG=false
+ARG INSTALL_FFMPEG=true
 RUN if [ "$INSTALL_FFMPEG" = "true" ]; then \
       apt-get update \
       && apt-get install -y --no-install-recommends ffmpeg \

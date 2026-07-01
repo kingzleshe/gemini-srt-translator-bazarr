@@ -37,12 +37,22 @@ def build_gst_command(
         ("--temperature", "gst_temperature"),
         ("--top-p", "gst_top_p"),
         ("--top-k", "gst_top_k"),
-        ("--thinking-budget", "gst_thinking_budget"),
-        ("--thinking-level", "gst_thinking_level"),
     ):
         value = str(settings.get(key) or "").strip()
         if value:
             command.extend([option, value])
+
+    thinking_budget = str(settings.get("gst_thinking_budget") or "").strip()
+    thinking_level = str(settings.get("gst_thinking_level") or "").strip()
+    if thinking_budget and thinking_level:
+        if "2.5" in model:
+            thinking_level = ""
+        else:
+            thinking_budget = ""
+    if thinking_budget:
+        command.extend(["--thinking-budget", thinking_budget])
+    if thinking_level:
+        command.extend(["--thinking-level", thinking_level])
     for option, key, default in (
         ("--skip-upgrade", "gst_skip_upgrade", True),
         ("--quiet", "gst_quiet", True),
@@ -83,6 +93,9 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, s
     temp_output = output_path.with_name(f"{output_path.stem}.partial.srt")
     if temp_output.exists():
         temp_output.unlink()
+    progress_path = Path(input_srt).with_suffix(".progress")
+    if progress_path.exists():
+        progress_path.unlink()
 
     command = build_gst_command(
         input_srt,
@@ -95,6 +108,11 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, s
     result = subprocess.run(command, text=True, capture_output=True, check=False, env=translation_environment(settings))
     if result.returncode != 0:
         raise RuntimeError(f"gst failed with exit {result.returncode}: {result.stderr[-1000:]}")
+    if progress_path.exists():
+        if temp_output.exists():
+            temp_output.unlink()
+        details = f"{getattr(result, 'stderr', '')}\n{getattr(result, 'stdout', '')}".strip()
+        raise RuntimeError(f"gst exited successfully but left a progress file: {progress_path}: {details[-1000:]}")
     if not temp_output.exists() or temp_output.stat().st_size == 0:
         raise RuntimeError(f"gst did not create a non-empty output file: {temp_output}")
 
