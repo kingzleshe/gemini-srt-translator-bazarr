@@ -818,6 +818,37 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(output.read_text(encoding="utf-8"), "embedded zh subtitle")
             self.assertFalse((root / "Movie.zh.partial.srt").exists())
 
+    def test_run_translation_preserves_partial_output_when_progress_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            partial = root / "Movie.zh.partial.srt"
+            progress = root / "Movie.en.progress"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            partial.write_text("already translated chunk", encoding="utf-8")
+            progress.write_text('{"line": 2, "input_file": "Movie.en.srt"}', encoding="utf-8")
+
+            def fake_run(command, **kwargs):
+                self.assertTrue(partial.exists())
+                partial.write_text("resumed translation", encoding="utf-8")
+                return type("Result", (), {"returncode": 0, "stderr": ""})()
+
+            with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
+                status = worker.run_translation(
+                    {
+                        "subtitle_path": str(subtitle),
+                        "output_path": str(output),
+                        "target_code": "zh",
+                        "target_language": "Simplified Chinese",
+                    },
+                    "",
+                    {"gemini_api_key": "secret"},
+                )
+
+            self.assertEqual(status, "translated")
+            self.assertEqual(output.read_text(encoding="utf-8"), "resumed translation")
+
     def test_scan_source_subtitles_finds_missing_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

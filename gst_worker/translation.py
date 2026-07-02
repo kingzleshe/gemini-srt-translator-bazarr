@@ -91,7 +91,9 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, s
         return "skipped-existing-output"
 
     temp_output = output_path.with_name(f"{output_path.stem}.partial.srt")
-    if temp_output.exists():
+    progress_path = Path(input_srt).with_suffix(".progress")
+    can_resume = temp_output.exists() and temp_output.stat().st_size > 0 and progress_path.exists()
+    if temp_output.exists() and not can_resume:
         temp_output.unlink()
 
     command = build_gst_command(
