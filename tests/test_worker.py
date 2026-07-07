@@ -233,7 +233,7 @@ class WorkerTests(unittest.TestCase):
         config = worker.normalize_app_config({})
 
         self.assertEqual(config["gst_batch_size"], 1000)
-        self.assertEqual(config["gst_retry_batch_size"], 300)
+        self.assertEqual(config["gst_retry_batch_size"], 500)
         self.assertEqual(config["job_settle_seconds"], 600)
         self.assertEqual(config["gst_temperature"], "0.7")
         self.assertEqual(config["gst_top_p"], "0.95")
@@ -888,14 +888,14 @@ class WorkerTests(unittest.TestCase):
                         "target_language": "Simplified Chinese",
                     },
                     "",
-                    {"gemini_api_key": "secret", "gst_batch_size": 1000, "gst_retry_batch_size": 300},
+                    {"gemini_api_key": "secret", "gst_batch_size": 1000, "gst_retry_batch_size": 500},
                 )
 
             self.assertEqual(status, "translated")
             self.assertEqual(output.read_text(encoding="utf-8"), "fallback translation")
             self.assertEqual(len(commands), 2)
             self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "1000")
-            self.assertEqual(commands[1][commands[1].index("--batch-size") + 1], "300")
+            self.assertEqual(commands[1][commands[1].index("--batch-size") + 1], "500")
 
     def test_run_translation_failure_reports_stdout_tail(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -158,7 +158,7 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
     logging.info("Running translation: %s -> %s", input_srt, output_srt)
     result = subprocess.run(command, text=True, capture_output=True, check=False, env=translation_environment(settings))
     primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 1000)
-    retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 300)
+    retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 500)
     if result.returncode == 130 and retry_batch_size > 0 and retry_batch_size < primary_batch_size:
         logging.warning(
             "gst exited 130 with batch size %s; retrying with batch size %s. %s",
