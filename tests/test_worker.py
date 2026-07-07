@@ -897,6 +897,41 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "1000")
             self.assertEqual(commands[1][commands[1].index("--batch-size") + 1], "500")
 
+    def test_run_translation_resumes_with_retry_batch_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            partial = root / "Movie.zh.partial.srt"
+            progress = root / "Movie.en.progress"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            partial.write_text("already translated chunk", encoding="utf-8")
+            progress.write_text('{"line": 701, "input_file": "Movie.en.srt"}', encoding="utf-8")
+            commands = []
+
+            def fake_run(command, **kwargs):
+                commands.append(command)
+                temp_output = Path(command[command.index("-o") + 1])
+                temp_output.write_text("finished from resume", encoding="utf-8")
+                return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+            with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
+                status = worker.run_translation(
+                    {
+                        "subtitle_path": str(subtitle),
+                        "output_path": str(output),
+                        "target_code": "zh",
+                        "target_language": "Simplified Chinese",
+                    },
+                    "",
+                    {"gemini_api_key": "secret", "gst_batch_size": 1000, "gst_retry_batch_size": 500},
+                )
+
+            self.assertEqual(status, "translated")
+            self.assertEqual(len(commands), 1)
+            self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "500")
+            self.assertEqual(output.read_text(encoding="utf-8"), "finished from resume")
+
     def test_run_translation_failure_reports_stdout_tail(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

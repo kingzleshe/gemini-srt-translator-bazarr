@@ -148,21 +148,31 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
     if temp_output.exists() and not can_resume:
         temp_output.unlink()
 
+    primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 1000)
+    retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 500)
+    command_settings = settings
+    command_batch_size = primary_batch_size
+    if can_resume and retry_batch_size > 0 and retry_batch_size < primary_batch_size:
+        line = _progress_line(progress_path)
+        if line is not None and line > 1:
+            logging.info("Resuming gst partial output with fallback batch size %s", retry_batch_size)
+            command_settings = dict(settings)
+            command_settings["gst_batch_size"] = retry_batch_size
+            command_batch_size = retry_batch_size
+
     command = build_gst_command(
         input_srt,
         str(temp_output),
         description,
         target_language=str(job.get("target_language") or os.getenv("GST_TARGET_LANGUAGE", "Simplified Chinese")),
-        gst_settings=settings,
+        gst_settings=command_settings,
     )
     logging.info("Running translation: %s -> %s", input_srt, output_srt)
     result = subprocess.run(command, text=True, capture_output=True, check=False, env=translation_environment(settings))
-    primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 1000)
-    retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 500)
-    if result.returncode == 130 and retry_batch_size > 0 and retry_batch_size < primary_batch_size:
+    if result.returncode == 130 and retry_batch_size > 0 and retry_batch_size < command_batch_size:
         logging.warning(
             "gst exited 130 with batch size %s; retrying with batch size %s. %s",
-            primary_batch_size,
+            command_batch_size,
             retry_batch_size,
             _result_output_tail(result),
         )
