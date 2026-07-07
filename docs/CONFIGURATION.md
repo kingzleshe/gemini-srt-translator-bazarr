@@ -20,6 +20,7 @@ Copy `.env.example` to `.env` and edit values for your host.
 | `WORKER_STATE_DIR` | Yes | `/opt/docker/gemini-srt-translator-bazarr` | Worker state, config, logs, and cache. |
 | `GST_MODEL` | No | `gemini-flash-latest` | Model passed to `gst translate --model`. |
 | `GST_BATCH_SIZE` | No | `1000` | Batch size passed to `gst translate --batch-size`. |
+| `GST_RETRY_BATCH_SIZE` | No | `300` | Fallback batch size used after a `gst` exit 130. Set `0` to disable fallback retry. |
 | `GST_TARGET_LANGUAGE` | No | `Simplified Chinese` | Legacy fallback when a job has no target language. |
 | `WORKER_SLEEP_SECONDS` | No | `15` | Delay between queue polling cycles. |
 | `HTTP_TIMEOUT_SECONDS` | No | `20` | Timeout for Bazarr and TMDB HTTP calls. |
@@ -121,6 +122,7 @@ Default:
   "tmdb_api_key": "",
   "gst_model": "gemini-flash-latest",
   "gst_batch_size": 1000,
+  "gst_retry_batch_size": 300,
   "gst_paid_quota": false,
   "gst_skip_upgrade": true,
   "gst_quiet": true,
@@ -159,6 +161,9 @@ The Settings page writes these `gst translate` options into app config:
 
 - `gst_model`: selected from `/api/gemini-models`; passed to `--model`.
 - `gst_batch_size`: passed to `--batch-size`.
+- `gst_retry_batch_size`: when `gst` exits 130 and this value is smaller than
+  `gst_batch_size`, the worker clears unsafe retry state and reruns the job with
+  this smaller `--batch-size`; set to `0` to disable the fallback.
 - `gst_paid_quota`: enables `--paid-quota`.
 - `gst_skip_upgrade`: enables `--skip-upgrade`.
 - `gst_quiet`: enables `--quiet`.

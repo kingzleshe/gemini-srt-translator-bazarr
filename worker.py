@@ -111,6 +111,7 @@ def load_settings(config_path: str | None = None) -> dict[str, Any]:
     for key in GST_BOOL_CONFIG_KEYS:
         settings[key] = bool(app_config.get(key))
     settings["gst_batch_size"] = int(app_config.get("gst_batch_size") or 1000)
+    settings["gst_retry_batch_size"] = int(app_config.get("gst_retry_batch_size", 300))
     settings["gst_model"] = str(app_config.get("gst_model") or os.getenv("GST_MODEL", "gemini-flash-latest"))
     settings["job_settle_seconds"] = int(app_config.get("job_settle_seconds") or 0)
     if os.getenv("GST_BATCH_SIZE") and not app_config.get("gst_batch_size"):

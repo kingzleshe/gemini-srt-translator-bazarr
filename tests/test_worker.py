@@ -189,6 +189,7 @@ class WorkerTests(unittest.TestCase):
                 {
                     "gst_model": "gemini-2.5-flash",
                     "gst_batch_size": 500,
+                    "gst_retry_batch_size": 250,
                     "gst_paid_quota": True,
                     "gst_skip_upgrade": False,
                     "gst_quiet": False,
@@ -210,6 +211,7 @@ class WorkerTests(unittest.TestCase):
 
             self.assertEqual(saved["gst_model"], "gemini-2.5-flash")
             self.assertEqual(saved["gst_batch_size"], 500)
+            self.assertEqual(saved["gst_retry_batch_size"], 250)
             self.assertTrue(saved["gst_paid_quota"])
             self.assertFalse(saved["gst_skip_upgrade"])
             self.assertFalse(saved["gst_quiet"])
@@ -231,6 +233,7 @@ class WorkerTests(unittest.TestCase):
         config = worker.normalize_app_config({})
 
         self.assertEqual(config["gst_batch_size"], 1000)
+        self.assertEqual(config["gst_retry_batch_size"], 300)
         self.assertEqual(config["job_settle_seconds"], 600)
         self.assertEqual(config["gst_temperature"], "0.7")
         self.assertEqual(config["gst_top_p"], "0.95")
@@ -848,6 +851,78 @@ class WorkerTests(unittest.TestCase):
 
             self.assertEqual(status, "translated")
             self.assertEqual(output.read_text(encoding="utf-8"), "resumed translation")
+
+    def test_run_translation_retries_exit_130_with_smaller_batch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            partial = root / "Movie.zh.partial.srt"
+            progress = root / "Movie.en.progress"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            commands = []
+
+            def fake_run(command, **kwargs):
+                commands.append(command)
+                temp_output = Path(command[command.index("-o") + 1])
+                if len(commands) == 1:
+                    temp_output.write_text("unsafe partial translation", encoding="utf-8")
+                    progress.write_text('{"line": 1, "input_file": "Movie.en.srt"}', encoding="utf-8")
+                    return type(
+                        "Result",
+                        (),
+                        {"returncode": 130, "stdout": "Expected 776 lines, got 679.", "stderr": ""},
+                    )()
+
+                self.assertFalse(partial.exists())
+                self.assertFalse(progress.exists())
+                temp_output.write_text("fallback translation", encoding="utf-8")
+                return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+            with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
+                status = worker.run_translation(
+                    {
+                        "subtitle_path": str(subtitle),
+                        "output_path": str(output),
+                        "target_code": "zh",
+                        "target_language": "Simplified Chinese",
+                    },
+                    "",
+                    {"gemini_api_key": "secret", "gst_batch_size": 1000, "gst_retry_batch_size": 300},
+                )
+
+            self.assertEqual(status, "translated")
+            self.assertEqual(output.read_text(encoding="utf-8"), "fallback translation")
+            self.assertEqual(len(commands), 2)
+            self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "1000")
+            self.assertEqual(commands[1][commands[1].index("--batch-size") + 1], "300")
+
+    def test_run_translation_failure_reports_stdout_tail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+
+            with patch(
+                "gst_worker.translation.subprocess.run",
+                return_value=type(
+                    "Result",
+                    (),
+                    {"returncode": 1, "stdout": "useful stdout failure detail", "stderr": ""},
+                )(),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "useful stdout failure detail"):
+                    worker.run_translation(
+                        {
+                            "subtitle_path": str(subtitle),
+                            "output_path": str(output),
+                            "target_code": "zh",
+                            "target_language": "Simplified Chinese",
+                        },
+                        "",
+                        {"gemini_api_key": "secret"},
+                    )
 
     def test_scan_source_subtitles_finds_missing_targets(self):
         with tempfile.TemporaryDirectory() as tmp:

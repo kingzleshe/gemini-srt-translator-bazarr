@@ -229,6 +229,7 @@ function fillSettings(settings) {
     : "No TMDB API key configured.";
   renderModelSelect(settings.gst_model);
   document.getElementById("gst-batch-size-input").value = settings.gst_batch_size || 1000;
+  document.getElementById("gst-retry-batch-size-input").value = settings.gst_retry_batch_size ?? 300;
   document.getElementById("job-settle-seconds-input").value = settings.job_settle_seconds ?? 600;
   document.getElementById("gst-paid-quota-input").checked = Boolean(settings.gst_paid_quota);
   document.getElementById("gst-skip-upgrade-input").checked = settings.gst_skip_upgrade !== false;
@@ -263,6 +264,7 @@ function parseSettings() {
     tmdb_api_key: document.getElementById("tmdb-api-key-input").value.trim(),
     gst_model: document.getElementById("gst-model-select").value,
     gst_batch_size: Number(document.getElementById("gst-batch-size-input").value || 1000),
+    gst_retry_batch_size: Number(document.getElementById("gst-retry-batch-size-input").value || 0),
     job_settle_seconds: Number(document.getElementById("job-settle-seconds-input").value || 0),
     gst_paid_quota: document.getElementById("gst-paid-quota-input").checked,
     gst_skip_upgrade: document.getElementById("gst-skip-upgrade-input").checked,

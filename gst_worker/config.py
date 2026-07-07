@@ -55,6 +55,7 @@ DEFAULT_APP_CONFIG = {
     "tmdb_api_key": "",
     "gst_model": "gemini-flash-latest",
     "gst_batch_size": 1000,
+    "gst_retry_batch_size": 300,
     "gst_paid_quota": False,
     "gst_skip_upgrade": True,
     "gst_quiet": True,
@@ -131,6 +132,10 @@ def normalize_app_config(config: dict[str, Any]) -> dict[str, Any]:
         normalized["gst_batch_size"] = max(1, int(normalized.get("gst_batch_size", 1000)))
     except (TypeError, ValueError):
         normalized["gst_batch_size"] = 1000
+    try:
+        normalized["gst_retry_batch_size"] = max(0, int(normalized.get("gst_retry_batch_size", 300)))
+    except (TypeError, ValueError):
+        normalized["gst_retry_batch_size"] = 300
     try:
         normalized["job_settle_seconds"] = max(0, int(normalized.get("job_settle_seconds", 600)))
     except (TypeError, ValueError):

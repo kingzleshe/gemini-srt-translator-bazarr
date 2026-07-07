@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
@@ -7,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from .subtitles import target_output_path
+
+
+GST_OUTPUT_TAIL_LENGTH = 1000
 
 
 def build_gst_command(
@@ -71,7 +75,55 @@ def build_gst_command(
     return command
 
 
-def translation_environment(settings: dict[str, str], base_env: dict[str, str] | None = None) -> dict[str, str]:
+def _result_output_tail(result: subprocess.CompletedProcess[str]) -> str:
+    stdout = str(getattr(result, "stdout", "") or "")
+    stderr = str(getattr(result, "stderr", "") or "")
+    parts = []
+    if stdout:
+        parts.append(f"stdout: {stdout[-GST_OUTPUT_TAIL_LENGTH:]}")
+    if stderr:
+        parts.append(f"stderr: {stderr[-GST_OUTPUT_TAIL_LENGTH:]}")
+    return "\n".join(parts) or "<no output>"
+
+
+def _format_gst_failure(result: subprocess.CompletedProcess[str]) -> str:
+    return f"gst failed with exit {result.returncode}: {_result_output_tail(result)}"
+
+
+def _int_setting(settings: dict[str, Any], key: str, env_key: str, default: int) -> int:
+    raw_value = settings.get(key)
+    if raw_value in (None, ""):
+        raw_value = os.getenv(env_key, str(default))
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _progress_line(progress_path: Path) -> int | None:
+    if not progress_path.exists():
+        return None
+    try:
+        data = json.loads(progress_path.read_text(encoding="utf-8"))
+        line = data.get("line")
+        return int(line) if line is not None else None
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _remove_untrusted_retry_state(temp_output: Path, progress_path: Path) -> None:
+    line = _progress_line(progress_path)
+    if line is not None and line > 1:
+        return
+    for path in (temp_output, progress_path):
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError as exc:
+            logging.warning("Failed to remove stale gst retry state %s: %s", path, exc)
+
+
+def translation_environment(settings: dict[str, Any], base_env: dict[str, str] | None = None) -> dict[str, str]:
     env = dict(base_env if base_env is not None else os.environ)
     gemini_api_key = str(settings.get("gemini_api_key") or "")
     gemini_api_key2 = str(settings.get("gemini_api_key2") or "")
@@ -83,7 +135,7 @@ def translation_environment(settings: dict[str, str], base_env: dict[str, str] |
     return env
 
 
-def run_translation(job: dict[str, Any], description: str, settings: dict[str, str]) -> str:
+def run_translation(job: dict[str, Any], description: str, settings: dict[str, Any]) -> str:
     input_srt = str(job["subtitle_path"])
     output_srt = str(job.get("output_path") or target_output_path(input_srt, str(job.get("target_code") or "zh")))
     output_path = Path(output_srt)
@@ -105,8 +157,34 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, s
     )
     logging.info("Running translation: %s -> %s", input_srt, output_srt)
     result = subprocess.run(command, text=True, capture_output=True, check=False, env=translation_environment(settings))
+    primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 1000)
+    retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 300)
+    if result.returncode == 130 and retry_batch_size > 0 and retry_batch_size < primary_batch_size:
+        logging.warning(
+            "gst exited 130 with batch size %s; retrying with batch size %s. %s",
+            primary_batch_size,
+            retry_batch_size,
+            _result_output_tail(result),
+        )
+        _remove_untrusted_retry_state(temp_output, progress_path)
+        retry_settings = dict(settings)
+        retry_settings["gst_batch_size"] = retry_batch_size
+        retry_command = build_gst_command(
+            input_srt,
+            str(temp_output),
+            description,
+            target_language=str(job.get("target_language") or os.getenv("GST_TARGET_LANGUAGE", "Simplified Chinese")),
+            gst_settings=retry_settings,
+        )
+        result = subprocess.run(
+            retry_command,
+            text=True,
+            capture_output=True,
+            check=False,
+            env=translation_environment(settings),
+        )
     if result.returncode != 0:
-        raise RuntimeError(f"gst failed with exit {result.returncode}: {result.stderr[-1000:]}")
+        raise RuntimeError(_format_gst_failure(result))
     if not temp_output.exists() or temp_output.stat().st_size == 0:
         raise RuntimeError(f"gst did not create a non-empty output file: {temp_output}")
 
