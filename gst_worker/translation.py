@@ -151,19 +151,25 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
 
     primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 1000)
     retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 500)
+    resume_fallback_batch_size = _int_setting(
+        settings,
+        "gst_resume_fallback_batch_size",
+        "GST_RESUME_FALLBACK_BATCH_SIZE",
+        50,
+    )
     command_settings = settings
     command_batch_size = primary_batch_size
-    if can_resume and retry_batch_size > 0 and retry_batch_size < primary_batch_size:
-        line = _progress_line(progress_path)
-        if line is not None and line > 1:
-            logging.info("Resuming gst partial output with fallback batch size %s", retry_batch_size)
-            command_settings = dict(settings)
-            command_settings["gst_batch_size"] = retry_batch_size
-            command_batch_size = retry_batch_size
+    resume_progress_line = _progress_line(progress_path) if can_resume else None
+    can_resume_from_progress = resume_progress_line is not None and resume_progress_line > 1
+    if can_resume_from_progress and retry_batch_size > 0 and retry_batch_size < primary_batch_size:
+        logging.info("Resuming gst partial output with fallback batch size %s", retry_batch_size)
+        command_settings = dict(settings)
+        command_settings["gst_batch_size"] = retry_batch_size
+        command_batch_size = retry_batch_size
 
     logging.info("Running translation: %s -> %s", input_srt, output_srt)
 
-    retry_batch_runs = 0
+    same_batch_exit_130_runs = 0
     while True:
         command = build_gst_command(
             input_srt,
@@ -179,8 +185,6 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
             check=False,
             env=translation_environment(settings),
         )
-        if command_batch_size == retry_batch_size:
-            retry_batch_runs += 1
         if result.returncode != 130 or retry_batch_size <= 0:
             break
         if retry_batch_size < command_batch_size:
@@ -194,13 +198,30 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
             command_settings = dict(settings)
             command_settings["gst_batch_size"] = retry_batch_size
             command_batch_size = retry_batch_size
-            retry_batch_runs = 0
+            same_batch_exit_130_runs = 0
             continue
-        if command_batch_size == retry_batch_size and retry_batch_runs < GST_RETRY_BATCH_ATTEMPTS:
+        if (
+            can_resume_from_progress
+            and resume_fallback_batch_size > 0
+            and resume_fallback_batch_size < command_batch_size
+        ):
             logging.warning(
-                "gst exited 130 with fallback batch size %s; retrying with the same batch size (%s/%s). %s",
-                retry_batch_size,
-                retry_batch_runs + 1,
+                "gst exited 130 while resuming with batch size %s; retrying with resume fallback batch size %s. %s",
+                command_batch_size,
+                resume_fallback_batch_size,
+                _result_output_tail(result),
+            )
+            command_settings = dict(settings)
+            command_settings["gst_batch_size"] = resume_fallback_batch_size
+            command_batch_size = resume_fallback_batch_size
+            same_batch_exit_130_runs = 0
+            continue
+        same_batch_exit_130_runs += 1
+        if same_batch_exit_130_runs < GST_RETRY_BATCH_ATTEMPTS:
+            logging.warning(
+                "gst exited 130 with batch size %s; retrying with the same batch size (%s/%s). %s",
+                command_batch_size,
+                same_batch_exit_130_runs + 1,
                 GST_RETRY_BATCH_ATTEMPTS,
                 _result_output_tail(result),
             )

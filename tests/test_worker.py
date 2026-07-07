@@ -190,6 +190,7 @@ class WorkerTests(unittest.TestCase):
                     "gst_model": "gemini-2.5-flash",
                     "gst_batch_size": 500,
                     "gst_retry_batch_size": 250,
+                    "gst_resume_fallback_batch_size": 50,
                     "gst_paid_quota": True,
                     "gst_skip_upgrade": False,
                     "gst_quiet": False,
@@ -212,6 +213,7 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(saved["gst_model"], "gemini-2.5-flash")
             self.assertEqual(saved["gst_batch_size"], 500)
             self.assertEqual(saved["gst_retry_batch_size"], 250)
+            self.assertEqual(saved["gst_resume_fallback_batch_size"], 50)
             self.assertTrue(saved["gst_paid_quota"])
             self.assertFalse(saved["gst_skip_upgrade"])
             self.assertFalse(saved["gst_quiet"])
@@ -234,6 +236,7 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual(config["gst_batch_size"], 1000)
         self.assertEqual(config["gst_retry_batch_size"], 500)
+        self.assertEqual(config["gst_resume_fallback_batch_size"], 50)
         self.assertEqual(config["job_settle_seconds"], 600)
         self.assertEqual(config["gst_temperature"], "0.7")
         self.assertEqual(config["gst_top_p"], "0.95")
@@ -964,13 +967,63 @@ class WorkerTests(unittest.TestCase):
                         "target_language": "Simplified Chinese",
                     },
                     "",
-                    {"gemini_api_key": "secret", "gst_batch_size": 1000, "gst_retry_batch_size": 500},
+                    {
+                        "gemini_api_key": "secret",
+                        "gst_batch_size": 1000,
+                        "gst_retry_batch_size": 500,
+                        "gst_resume_fallback_batch_size": 0,
+                    },
                 )
 
             self.assertEqual(status, "translated")
             self.assertEqual(len(commands), 3)
             self.assertEqual([command[command.index("--batch-size") + 1] for command in commands], ["500", "500", "500"])
             self.assertEqual(output.read_text(encoding="utf-8"), "finished after fixed retry")
+
+    def test_run_translation_uses_resume_fallback_batch_after_resume_exit_130(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            partial = root / "Movie.zh.partial.srt"
+            progress = root / "Movie.en.progress"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            partial.write_text("already translated chunk", encoding="utf-8")
+            progress.write_text('{"line": 701, "input_file": "Movie.en.srt"}', encoding="utf-8")
+            commands = []
+
+            def fake_run(command, **kwargs):
+                commands.append(command)
+                temp_output = Path(command[command.index("-o") + 1])
+                if len(commands) == 1:
+                    self.assertTrue(partial.exists())
+                    self.assertTrue(progress.exists())
+                    return type("Result", (), {"returncode": 130, "stdout": "Model is overloaded", "stderr": ""})()
+
+                temp_output.write_text("finished after resume fallback", encoding="utf-8")
+                return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+            with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
+                status = worker.run_translation(
+                    {
+                        "subtitle_path": str(subtitle),
+                        "output_path": str(output),
+                        "target_code": "zh",
+                        "target_language": "Simplified Chinese",
+                    },
+                    "",
+                    {
+                        "gemini_api_key": "secret",
+                        "gst_batch_size": 1000,
+                        "gst_retry_batch_size": 500,
+                        "gst_resume_fallback_batch_size": 50,
+                    },
+                )
+
+            self.assertEqual(status, "translated")
+            self.assertEqual(len(commands), 2)
+            self.assertEqual([command[command.index("--batch-size") + 1] for command in commands], ["500", "50"])
+            self.assertEqual(output.read_text(encoding="utf-8"), "finished after resume fallback")
 
     def test_run_translation_failure_reports_stdout_tail(self):
         with tempfile.TemporaryDirectory() as tmp:

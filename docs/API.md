@@ -93,6 +93,7 @@ current stored key.
   "gst_model": "gemini-flash-latest",
   "gst_batch_size": 1000,
   "gst_retry_batch_size": 500,
+  "gst_resume_fallback_batch_size": 50,
   "gst_paid_quota": false,
   "gst_skip_upgrade": true,
   "gst_quiet": true,
