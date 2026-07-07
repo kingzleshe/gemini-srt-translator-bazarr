@@ -11,6 +11,7 @@ from .subtitles import target_output_path
 
 
 GST_OUTPUT_TAIL_LENGTH = 1000
+GST_RETRY_BATCH_ATTEMPTS = 3
 
 
 def build_gst_command(
@@ -160,39 +161,51 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
             command_settings["gst_batch_size"] = retry_batch_size
             command_batch_size = retry_batch_size
 
-    command = build_gst_command(
-        input_srt,
-        str(temp_output),
-        description,
-        target_language=str(job.get("target_language") or os.getenv("GST_TARGET_LANGUAGE", "Simplified Chinese")),
-        gst_settings=command_settings,
-    )
     logging.info("Running translation: %s -> %s", input_srt, output_srt)
-    result = subprocess.run(command, text=True, capture_output=True, check=False, env=translation_environment(settings))
-    if result.returncode == 130 and retry_batch_size > 0 and retry_batch_size < command_batch_size:
-        logging.warning(
-            "gst exited 130 with batch size %s; retrying with batch size %s. %s",
-            command_batch_size,
-            retry_batch_size,
-            _result_output_tail(result),
-        )
-        _remove_untrusted_retry_state(temp_output, progress_path)
-        retry_settings = dict(settings)
-        retry_settings["gst_batch_size"] = retry_batch_size
-        retry_command = build_gst_command(
+
+    retry_batch_runs = 0
+    while True:
+        command = build_gst_command(
             input_srt,
             str(temp_output),
             description,
             target_language=str(job.get("target_language") or os.getenv("GST_TARGET_LANGUAGE", "Simplified Chinese")),
-            gst_settings=retry_settings,
+            gst_settings=command_settings,
         )
         result = subprocess.run(
-            retry_command,
+            command,
             text=True,
             capture_output=True,
             check=False,
             env=translation_environment(settings),
         )
+        if command_batch_size == retry_batch_size:
+            retry_batch_runs += 1
+        if result.returncode != 130 or retry_batch_size <= 0:
+            break
+        if retry_batch_size < command_batch_size:
+            logging.warning(
+                "gst exited 130 with batch size %s; retrying with batch size %s. %s",
+                command_batch_size,
+                retry_batch_size,
+                _result_output_tail(result),
+            )
+            _remove_untrusted_retry_state(temp_output, progress_path)
+            command_settings = dict(settings)
+            command_settings["gst_batch_size"] = retry_batch_size
+            command_batch_size = retry_batch_size
+            retry_batch_runs = 0
+            continue
+        if command_batch_size == retry_batch_size and retry_batch_runs < GST_RETRY_BATCH_ATTEMPTS:
+            logging.warning(
+                "gst exited 130 with fallback batch size %s; retrying with the same batch size (%s/%s). %s",
+                retry_batch_size,
+                retry_batch_runs + 1,
+                GST_RETRY_BATCH_ATTEMPTS,
+                _result_output_tail(result),
+            )
+            continue
+        break
     if result.returncode != 0:
         raise RuntimeError(_format_gst_failure(result))
     if not temp_output.exists() or temp_output.stat().st_size == 0:
