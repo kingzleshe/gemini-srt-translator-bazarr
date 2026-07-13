@@ -59,6 +59,7 @@ from gst_worker.queue import (
     ensure_queue_dirs,
     job_id_for,
     queue_snapshot,
+    retry_failed_job,
     should_skip_job,
 )
 from gst_worker.subtitles import (
@@ -251,19 +252,6 @@ def read_binary_body(handler: BaseHTTPRequestHandler) -> bytes:
     if length <= 0:
         raise ValueError("request body is empty")
     return handler.rfile.read(length)
-
-
-def retry_failed_job(queue_dir: str, job_id: str) -> bool:
-    ensure_queue_dirs(queue_dir)
-    failed = Path(queue_dir) / "failed" / f"{job_id}.json"
-    pending = Path(queue_dir) / "pending" / f"{job_id}.json"
-    if not failed.exists() or pending.exists():
-        return False
-    error = failed.with_suffix(".error")
-    failed.replace(pending)
-    if error.exists():
-        error.unlink()
-    return True
 
 
 def delete_queue_job(queue_dir: str, state: str, job_id: str) -> bool:

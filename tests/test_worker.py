@@ -718,6 +718,34 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(job["source_code"], "ja")
             self.assertEqual(job["source_language"], "Japanese")
 
+    def test_enqueue_translation_jobs_retries_existing_failed_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp) / "queue"
+            subtitle = Path(tmp) / "Episode.en.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            base_job = {
+                "subtitle_path": str(subtitle),
+                "provider": "gemini-console",
+                "source_code": "en",
+                "source_language": "English",
+                "media_type": "episode",
+            }
+            targets = [{"code": "zh", "language": "Simplified Chinese", "enabled": True}]
+
+            [pending_path_string] = worker.enqueue_translation_jobs(str(queue_dir), base_job, targets)
+            pending_path = Path(pending_path_string)
+            failed_path = queue_dir / "failed" / pending_path.name
+            pending_path.replace(failed_path)
+            failed_path.with_suffix(".error").write_text("gst failed with exit 1", encoding="utf-8")
+
+            created = worker.enqueue_translation_jobs(str(queue_dir), base_job, targets)
+            snapshot = worker.queue_snapshot(str(queue_dir))
+
+            self.assertEqual(created, [str(pending_path)])
+            self.assertEqual(snapshot["counts"]["pending"], 1)
+            self.assertEqual(snapshot["counts"]["failed"], 0)
+            self.assertFalse(failed_path.with_suffix(".error").exists())
+
     def test_enqueue_translation_jobs_skips_same_source_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"

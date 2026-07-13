@@ -40,6 +40,19 @@ def job_id_for(subtitle_path: str, output_path: str, target_code: str) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
+def retry_failed_job(queue_dir: str, job_id: str) -> bool:
+    ensure_queue_dirs(queue_dir)
+    failed = Path(queue_dir) / "failed" / f"{job_id}.json"
+    pending = Path(queue_dir) / "pending" / f"{job_id}.json"
+    if not failed.exists() or pending.exists():
+        return False
+    error = failed.with_suffix(".error")
+    failed.replace(pending)
+    if error.exists():
+        error.unlink()
+    return True
+
+
 def enqueue_translation_jobs(
     queue_dir: str,
     base_job: dict[str, Any],
@@ -64,6 +77,9 @@ def enqueue_translation_jobs(
         pending = Path(queue_dir) / "pending" / f"{jid}.json"
         processing = Path(queue_dir) / "processing" / f"{jid}.json"
         if pending.exists() or processing.exists():
+            continue
+        if retry_failed_job(queue_dir, jid):
+            created.append(str(pending))
             continue
 
         job = {
