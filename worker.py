@@ -292,6 +292,15 @@ def run_backup_scheduler(state_dir: str, config_path: str, postprocess_targets_p
 class ConsoleHandler(BaseHTTPRequestHandler):
     server_version = "GeminiSRTConsole/1.0"
 
+    def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+        try:
+            status_code = int(code)
+        except (TypeError, ValueError):
+            super().log_request(code, size)
+            return
+        if status_code >= 400:
+            super().log_request(code, size)
+
     def log_message(self, fmt: str, *args: Any) -> None:
         logging.info("web %s - %s", self.address_string(), fmt % args)
 

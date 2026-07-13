@@ -637,6 +637,33 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue(result)
             self.assertEqual(log_path.read_text(encoding="utf-8"), "")
 
+    def test_console_handler_suppresses_routine_http_access_logs(self):
+        handler = object.__new__(worker.ConsoleHandler)
+        handler.client_address = ("127.0.0.1", 12345)
+        handler.requestline = "GET /api/status HTTP/1.1"
+
+        with self.assertNoLogs(level="INFO"):
+            handler.log_request(200)
+
+    def test_console_handler_keeps_failed_http_access_logs(self):
+        handler = object.__new__(worker.ConsoleHandler)
+        handler.client_address = ("127.0.0.1", 12345)
+        handler.requestline = "POST /api/settings HTTP/1.1"
+
+        with self.assertLogs(level="INFO") as captured:
+            handler.log_request(400)
+
+        self.assertEqual(captured.output, ['INFO:root:web 127.0.0.1 - "POST /api/settings HTTP/1.1" 400 -'])
+
+    def test_console_handler_keeps_http_protocol_error_logs(self):
+        handler = object.__new__(worker.ConsoleHandler)
+        handler.client_address = ("127.0.0.1", 12345)
+
+        with self.assertLogs(level="INFO") as captured:
+            handler.log_error("code %d, message %s", 400, "Bad request syntax")
+
+        self.assertEqual(captured.output, ["INFO:root:web 127.0.0.1 - code 400, message Bad request syntax"])
+
     def test_job_should_skip_non_embedded_same_language_and_existing_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             subtitle = Path(tmp) / "Episode.ja.srt"
