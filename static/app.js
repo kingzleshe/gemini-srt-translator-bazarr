@@ -20,6 +20,11 @@ const titles = {
   logs: ["Logs", "Recent worker output."],
 };
 
+function viewFromHash() {
+  const view = window.location.hash.slice(1);
+  return Object.prototype.hasOwnProperty.call(titles, view) ? view : "dashboard";
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -47,6 +52,15 @@ function switchView(view) {
   document.getElementById("view-title").textContent = titles[view][0];
   document.getElementById("view-subtitle").textContent = titles[view][1];
   refresh();
+}
+
+function navigateTo(view) {
+  const hash = `#${view}`;
+  if (window.location.hash === hash) {
+    switchView(view);
+    return;
+  }
+  window.location.hash = hash;
 }
 
 async function loadLanguages() {
@@ -506,8 +520,8 @@ async function refresh() {
   }
 }
 
-document.querySelectorAll(".nav").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
-document.getElementById("refresh").addEventListener("click", refresh);
+document.querySelectorAll(".nav").forEach((button) => button.addEventListener("click", () => navigateTo(button.dataset.view)));
+window.addEventListener("hashchange", () => switchView(viewFromHash()));
 document.getElementById("save-settings").addEventListener("click", saveSettings);
 document.getElementById("create-backup").addEventListener("click", createBackup);
 document.getElementById("import-backup").addEventListener("click", importBackup);
@@ -522,4 +536,4 @@ document.getElementById("load-wanted").addEventListener("click", loadWanted);
 document.getElementById("load-scan").addEventListener("click", loadScan);
 document.getElementById("enqueue-scan").addEventListener("click", enqueueScan);
 
-refresh();
+switchView(viewFromHash());

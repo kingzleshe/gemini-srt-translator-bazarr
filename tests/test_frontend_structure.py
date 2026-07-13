@@ -66,6 +66,15 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("/api/backups/import", app_js)
         self.assertIn("importBackup", app_js)
 
+    def test_navigation_uses_url_hash_and_has_no_refresh_button(self):
+        html = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+
+        self.assertNotIn('id="refresh"', html)
+        self.assertIn("window.location.hash", app_js)
+        self.assertIn('window.addEventListener("hashchange"', app_js)
+        self.assertIn("switchView(viewFromHash())", app_js)
+
 
 class BackendPackageBoundaryTests(unittest.TestCase):
     def test_worker_reexports_split_package_helpers(self):
