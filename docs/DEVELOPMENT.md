@@ -2,39 +2,37 @@
 
 ## Local Setup
 
-Use Python 3.14 for parity with the Docker image. Python 3.12 or newer should
-still work for local development.
+Use [uv](https://docs.astral.sh/uv/) for local dependency management. The
+checked-in lockfile selects Python 3.14 for parity with the Docker image; the
+application supports Python 3.12 through 3.14.
 
 ```bash
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+uv sync --locked
 ```
 
-On Windows PowerShell:
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
+`uv` downloads the requested Python version when it is not already installed.
 
 ## Run Tests
 
 ```bash
-python -m unittest discover -s tests -t . -v
-python -m py_compile worker.py gst_worker/*.py
+uv run --locked python -m unittest discover -s tests -t . -v
+uv run --locked python -m compileall -q -f worker.py gst_worker
 ```
 
-From the parent workspace on Windows:
+## Update the Upstream Translator
+
+The direct dependency allows compatible 3.x releases while `uv.lock` pins the
+exact version used by local development, CI, and Docker. To check for a new
+release, update the lockfile, and run the verification suite:
 
 ```powershell
-py -3 -m unittest discover -s .\gemini-srt-translator-bazarr\tests -t .\gemini-srt-translator-bazarr -v
-$files = @('.\gemini-srt-translator-bazarr\worker.py') + (Get-ChildItem .\gemini-srt-translator-bazarr\gst_worker -Filter *.py | ForEach-Object { $_.FullName })
-py -3 -m py_compile @files
+uv run python scripts/update_upstream.py
 ```
+
+Dependabot runs the equivalent release check weekly and opens a pull request
+when a compatible `gemini-srt-translator` release is available. Pull requests
+must pass the CI workflow before merging; the existing Docker workflow publishes
+the updated image after the change reaches `main`.
 
 ## Run Locally
 

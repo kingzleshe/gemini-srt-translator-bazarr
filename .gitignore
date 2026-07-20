@@ -8,6 +8,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 .venv/
+.uv-cache/
+.uv-python/
 venv/
 state/
 queue/

@@ -1,11 +1,15 @@
 FROM python:3.14-slim
 
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+
 LABEL org.opencontainers.image.title="Gemini SRT Translator for Bazarr" \
       org.opencontainers.image.description="A Bazarr companion app that translates configured source subtitles with gemini-srt-translator." \
       org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
@@ -16,9 +20,9 @@ RUN if [ "$INSTALL_FFMPEG" = "true" ]; then \
       && rm -rf /var/lib/apt/lists/*; \
     fi
 
-COPY requirements.txt /app/requirements.txt
-RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-cache-dir -r /app/requirements.txt
+COPY pyproject.toml uv.lock /app/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev
 
 COPY worker.py /app/worker.py
 COPY gst_worker /app/gst_worker

@@ -128,9 +128,10 @@ class DeploymentConfigTests(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
-        requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-        self.assertIn("gemini-srt-translator==3.5.9", requirements)
+        self.assertIn('"gemini-srt-translator>=3.5.9,<4"', pyproject)
+        self.assertIn("uv sync --locked --no-dev", dockerfile)
         self.assertIn("ARG INSTALL_FFMPEG=false", dockerfile)
         self.assertIn("apt-get install -y --no-install-recommends ffmpeg", dockerfile)
         self.assertIn("INSTALL_FFMPEG: ${INSTALL_FFMPEG:-false}", compose)

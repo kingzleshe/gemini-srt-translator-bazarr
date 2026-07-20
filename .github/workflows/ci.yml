@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python 3.14
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          version: "0.11.29"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Run tests
+        run: uv run --locked python -m unittest discover -s tests -t . -v
+
+      - name: Compile Python sources
+        run: uv run --locked python -m compileall -q -f worker.py gst_worker
+
+      - name: Check upstream CLI
+        run: uv run --locked gst --help
