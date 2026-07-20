@@ -1,3 +1,0 @@
-# Automatically request review from the repository owner for dependency updates.
-/pyproject.toml @kingzleshe
-/uv.lock @kingzleshe
