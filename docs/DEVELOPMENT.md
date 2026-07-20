@@ -29,7 +29,7 @@ release, update the lockfile, and run the verification suite:
 uv run python scripts/update_upstream.py
 ```
 
-Dependabot runs the equivalent release check weekly and opens a pull request
+Dependabot runs the equivalent release check daily and opens a pull request
 when a compatible `gemini-srt-translator` release is available. Pull requests
 must pass the CI workflow before merging; the existing Docker workflow publishes
 the updated image after the change reaches `main`.

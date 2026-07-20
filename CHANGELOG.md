@@ -3,7 +3,7 @@
   `pyproject.toml`, uv, and a reproducible `uv.lock`.
 - Upgraded gemini-srt-translator to 3.6.1.
 - Added a manual upstream dependency update script.
-- Added weekly Dependabot dependency update pull requests.
+- Added daily Dependabot dependency update pull requests.
 - Added CI checks for the locked environment, test suite, Python compilation,
   and the upstream `gst` CLI.
 
