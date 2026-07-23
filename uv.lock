@@ -276,7 +276,7 @@ wheels = [
 
 [[package]]
 name = "gemini-srt-translator"
-version = "3.6.1"
+version = "3.6.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "audioop-lts", marker = "python_full_version >= '3.13'" },
@@ -286,9 +286,9 @@ dependencies = [
     { name = "pydub" },
     { name = "pysubs2" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/72/90/629de44711c8e7ef61febe9f0f1ece5e68f9b97280eab5243374b52547ef/gemini_srt_translator-3.6.1.tar.gz", hash = "sha256:bedbd3fd0307c4b82a6e0236ecb961f017b46cc73b62ad9f6d0cbbff593795d4", size = 50366, upload-time = "2026-07-20T15:08:24.194Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7b/7c/1ce2cd71c32dca437961af93b04e7d51f41e9214db078792882dceef2e68/gemini_srt_translator-3.6.2.tar.gz", hash = "sha256:e5091410a82ec92f555a72780bda676048db3fb5e292e71363242913c3971445", size = 50427, upload-time = "2026-07-22T12:33:52.502Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/77/45/250da31d929a772df612df492e7e27ec623abb29eb3068d081468100f47a/gemini_srt_translator-3.6.1-py3-none-any.whl", hash = "sha256:dd2c3d59cb978af5ae036bbedbbc867d9f2200a1947a5970bd79664216f52ebe", size = 45248, upload-time = "2026-07-20T15:08:22.998Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/ea/a4bfedd110a1c9427f8f135cd405b0e1773902546fbec130a65a19a56001/gemini_srt_translator-3.6.2-py3-none-any.whl", hash = "sha256:e6365a03791f86e44a1575e586283c0d647fb5fe2d659020a754547a8bb1f15f", size = 45259, upload-time = "2026-07-22T12:33:53.633Z" },
 ]
 
 [[package]]
@@ -300,7 +300,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "gemini-srt-translator", specifier = ">=3.5.9,<4" }]
+requires-dist = [{ name = "gemini-srt-translator", specifier = ">=3.6.2,<4" }]
 
 [[package]]
 name = "google-auth"
