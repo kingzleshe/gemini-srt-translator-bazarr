@@ -1,3 +1,7 @@
+# 2026-07-23
+- Fixed the dependency constraint test so compatible Dependabot 3.x update PRs
+  do not fail CI when the minimum version changes.
+
 # 2026-07-21
 - Migrated dependency management from `requirements.txt` and pip to
   `pyproject.toml`, uv, and a reproducible `uv.lock`.

@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import tomllib
 import unittest
 
 
@@ -128,14 +129,20 @@ class DeploymentConfigTests(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
-        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-        self.assertIn('"gemini-srt-translator>=3.5.9,<4"', pyproject)
         self.assertIn("uv sync --locked --no-dev", dockerfile)
         self.assertIn("ARG INSTALL_FFMPEG=false", dockerfile)
         self.assertIn("apt-get install -y --no-install-recommends ffmpeg", dockerfile)
         self.assertIn("INSTALL_FFMPEG: ${INSTALL_FFMPEG:-false}", compose)
         self.assertIn("INSTALL_FFMPEG=false", env_example)
+
+    def test_upstream_dependency_allows_compatible_3x_updates(self):
+        pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        dependencies = pyproject["project"]["dependencies"]
+        upstream = [item for item in dependencies if item.startswith("gemini-srt-translator")]
+
+        self.assertEqual(len(upstream), 1)
+        self.assertRegex(upstream[0], r"^gemini-srt-translator>=\d+\.\d+\.\d+,<4$")
 
 
 if __name__ == "__main__":
