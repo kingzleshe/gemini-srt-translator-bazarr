@@ -2,7 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.12, <3.15"
 resolution-markers = [
-    "python_full_version >= '3.13'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
     "python_full_version < '3.13'",
 ]
 
@@ -276,7 +277,7 @@ wheels = [
 
 [[package]]
 name = "gemini-srt-translator"
-version = "3.6.2"
+version = "3.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "audioop-lts", marker = "python_full_version >= '3.13'" },
@@ -286,9 +287,9 @@ dependencies = [
     { name = "pydub" },
     { name = "pysubs2" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7b/7c/1ce2cd71c32dca437961af93b04e7d51f41e9214db078792882dceef2e68/gemini_srt_translator-3.6.2.tar.gz", hash = "sha256:e5091410a82ec92f555a72780bda676048db3fb5e292e71363242913c3971445", size = 50427, upload-time = "2026-07-22T12:33:52.502Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/cf/6f60708d1e639befc5902dcd74888c8be8d94bb218a08d3eab7d3266717d/gemini_srt_translator-3.7.0.tar.gz", hash = "sha256:3414d12c4d88a0cd4c830d54fe2c598d5210420622a247fac56800de20c5dc41", size = 50489, upload-time = "2026-08-13T19:20:09.072Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e4/ea/a4bfedd110a1c9427f8f135cd405b0e1773902546fbec130a65a19a56001/gemini_srt_translator-3.6.2-py3-none-any.whl", hash = "sha256:e6365a03791f86e44a1575e586283c0d647fb5fe2d659020a754547a8bb1f15f", size = 45259, upload-time = "2026-07-22T12:33:53.633Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/04/9971ab4c65c6f10e3d5257f386ef5e30675fd3a4f7a86ccee54a3133aafc/gemini_srt_translator-3.7.0-py3-none-any.whl", hash = "sha256:30b63a2846d43ef81ce861f0f37f1d79c844591a573383979d255c177d64b892", size = 45252, upload-time = "2026-08-13T19:20:10.048Z" },
 ]
 
 [[package]]
@@ -304,15 +305,15 @@ requires-dist = [{ name = "gemini-srt-translator", specifier = ">=3.6.2,<4" }]
 
 [[package]]
 name = "google-auth"
-version = "2.55.2"
+version = "2.56.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "pyasn1-modules" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/79/b9/e370d86fea3da13ec0256df30323dd26c0cb9c8c85f0c6ec42ac9df0106b/google_auth-2.55.2.tar.gz", hash = "sha256:97ae7790ff740f2bc9db60eb864a7804f4ac19f5f02c38b3d942f2fea6e9b9ae", size = 361414, upload-time = "2026-07-07T18:43:21.227Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/4c/fa42116a48bab3f7a143cf5042ecff7df9c8b73f8a376203cd534d1dc966/google_auth-2.56.3.tar.gz", hash = "sha256:40e229fc901f0a305b553050e5fce562d509bee0435be053abfa91582b51b90c", size = 367110, upload-time = "2026-08-06T06:24:01.36Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/c6/02eb5a337ac316a4c30c012e747bad5cea36e1a876efecdf80865541f7d8/google_auth-2.55.2-py3-none-any.whl", hash = "sha256:d715f265f2cafc6a5f1bf0dc19870d20e3119f6f6682785a250bce3d03d38a3b", size = 256778, upload-time = "2026-07-07T18:43:19.52Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/b3/6117b2f24065cd7e2c4f140e9a193e215f089ca8ba314cf91eb9d0b7fe0a/google_auth-2.56.3-py3-none-any.whl", hash = "sha256:8ec438808f813ad034535000261eed1067475d229d05bbf4216e78c3f2362e53", size = 259116, upload-time = "2026-08-06T06:22:51.788Z" },
 ]
 
 [package.optional-dependencies]
@@ -322,7 +323,7 @@ requests = [
 
 [[package]]
 name = "google-genai"
-version = "2.12.1"
+version = "2.18.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -336,9 +337,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/96/59/9ea84cbeb8f09694564d3b0ee9dd59003551b308d47b61f251415df93982/google_genai-2.12.1.tar.gz", hash = "sha256:78c25217885d63dc430ca7c4526853512b164a25a93a8a0d0af5b85971aa1db0", size = 636710, upload-time = "2026-07-16T16:15:02.035Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/19/e3/1dd592243a0dfc3487ddfff7995f12686d0557ec953173dd9bdbeba2cb96/google_genai-2.18.1.tar.gz", hash = "sha256:a1e2be75c16234adc6641afd1ad4dd44218c9eec005d938bdc428585a048918a", size = 659694, upload-time = "2026-08-13T22:13:50.226Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/b4/1369fb413fc2ba7f78acace5590b6e9990c52ab5d1d166aafaa1ae2c28c8/google_genai-2.12.1-py3-none-any.whl", hash = "sha256:686d5ec39bda345151d3ed1bac3915f01f49138b1ea519af2eb98f11cc55ebc4", size = 1023403, upload-time = "2026-07-16T16:14:59.79Z" },
+    { url = "https://files.pythonhosted.org/packages/30/7d/5310f7a1cf290a6cb22eab37059610bf338ab7595892902591d2220cf825/google_genai-2.18.1-py3-none-any.whl", hash = "sha256:36a5949233e64a60f6cc4521bff7a76b7c569d0aa227bbe9fa642213b8a3a3b2", size = 1051129, upload-time = "2026-08-13T22:13:48.083Z" },
 ]
 
 [[package]]
@@ -389,11 +390,11 @@ wheels = [
 
 [[package]]
 name = "json-repair"
-version = "0.61.6"
+version = "0.63.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/de/27/b34afa132d79c2a73e944d91df2141d145163e863aa9cb6db99a3956cdee/json_repair-0.61.6.tar.gz", hash = "sha256:b10cf0c1570d9eac407520d1f164bc88316692f5bf83fbe35e69c9000c3ae5bc", size = 51428, upload-time = "2026-07-19T17:35:29.252Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/29/e702c7237a55a07afcc0e77c974749c2850dd992b81443496faacd9e82f1/json_repair-0.63.1.tar.gz", hash = "sha256:78bf4f23aa30238049ea7111cb23f39047c29b5ade0550660065c619cd209aa0", size = 52347, upload-time = "2026-08-12T18:11:42.882Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/8a/c39e1500b09241eb56a41c42bf591f72308d5a33e8755fa6156b8d514b47/json_repair-0.61.6-py3-none-any.whl", hash = "sha256:00858025b19a1a6708f1b1311b76ca6e58e5628c3ba633583dcf2bd05a66333a", size = 49951, upload-time = "2026-07-19T17:35:27.875Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/34/1e5355d8caa9b88bb18b950b26c2b57aee4717445b4860100b1a05e13335/json_repair-0.63.1-py3-none-any.whl", hash = "sha256:5d8c543275166a5fc6ca9e9f32e4e542c58237844aafb3510a83d559daaab171", size = 50776, upload-time = "2026-08-12T18:11:41.754Z" },
 ]
 
 [[package]]
