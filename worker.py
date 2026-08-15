@@ -55,6 +55,7 @@ from gst_worker.gemini import gemini_models
 from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache, cached_get_json, first_data
 from gst_worker.queue import (
     QUEUE_STATES,
+    cancel_failed_job,
     enqueue_translation_jobs,
     ensure_queue_dirs,
     job_id_for,
@@ -456,6 +457,8 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                 self.send_json({"created": created, "count": len(created)})
             elif parsed.path == "/api/queue/retry":
                 self.send_json({"ok": retry_failed_job(self.ctx["queue_dir"], str(body.get("job_id", "")))})
+            elif parsed.path == "/api/queue/cancel":
+                self.send_json({"ok": cancel_failed_job(self.ctx["queue_dir"], str(body.get("job_id", "")))})
             elif parsed.path == "/api/queue/delete":
                 self.send_json(
                     {

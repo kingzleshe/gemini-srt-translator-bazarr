@@ -424,13 +424,24 @@ async function loadQueue() {
         ${job.error ? `<div class="status-warn">${job.error}</div>` : ""}
       `;
       if (name === "failed") {
+        const actions = document.createElement("div");
+        actions.className = "job-actions";
         const retry = document.createElement("button");
         retry.textContent = "Retry";
         retry.onclick = async () => {
           await api("/api/queue/retry", { method: "POST", body: JSON.stringify({ job_id: job.job_id }) });
           await refresh();
         };
-        card.appendChild(retry);
+        const cancel = document.createElement("button");
+        cancel.textContent = "Cancel";
+        cancel.className = "danger";
+        cancel.onclick = async () => {
+          if (!window.confirm("Cancel this failed translation? It will be removed from the queue and will not be retried.")) return;
+          await api("/api/queue/cancel", { method: "POST", body: JSON.stringify({ job_id: job.job_id }) });
+          await refresh();
+        };
+        actions.append(retry, cancel);
+        card.appendChild(actions);
       }
       col.appendChild(card);
     });

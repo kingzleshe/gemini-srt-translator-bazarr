@@ -816,6 +816,22 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(snapshot["counts"]["failed"], 1)
             self.assertEqual(snapshot["failed"][0]["error"], "boom")
 
+    def test_cancel_failed_job_removes_job_and_error_without_retrying(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp)
+            failed_dir = queue_dir / "failed"
+            failed_dir.mkdir()
+            job = failed_dir / "cancel-me.json"
+            error = failed_dir / "cancel-me.error"
+            job.write_text('{"job_id":"cancel-me"}', encoding="utf-8")
+            error.write_text("quota exhausted", encoding="utf-8")
+
+            self.assertTrue(worker.cancel_failed_job(str(queue_dir), "cancel-me"))
+            self.assertFalse(job.exists())
+            self.assertFalse(error.exists())
+            self.assertFalse((queue_dir / "pending" / "cancel-me.json").exists())
+            self.assertFalse(worker.cancel_failed_job(str(queue_dir), "cancel-me"))
+
     def test_queue_worker_waits_for_settle_window_before_translation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

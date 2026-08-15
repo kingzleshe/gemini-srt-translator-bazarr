@@ -60,6 +60,13 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("gst_token_report", app_js)
         self.assertNotIn("gst_token_stats", app_js)
 
+    def test_failed_jobs_support_cancellation(self):
+        app_js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('cancel.textContent = "Cancel"', app_js)
+        self.assertIn("/api/queue/cancel", app_js)
+        self.assertIn("Cancel this failed translation?", app_js)
+
     def test_backup_ui_supports_download_and_import(self):
         app_js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
 

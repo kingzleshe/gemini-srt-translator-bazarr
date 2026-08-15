@@ -53,6 +53,19 @@ def retry_failed_job(queue_dir: str, job_id: str) -> bool:
     return True
 
 
+def cancel_failed_job(queue_dir: str, job_id: str) -> bool:
+    """Permanently remove a failed job without scheduling another attempt."""
+    ensure_queue_dirs(queue_dir)
+    failed = Path(queue_dir) / "failed" / f"{job_id}.json"
+    if not failed.exists():
+        return False
+    error = failed.with_suffix(".error")
+    failed.unlink()
+    if error.exists():
+        error.unlink()
+    return True
+
+
 def enqueue_translation_jobs(
     queue_dir: str,
     base_job: dict[str, Any],

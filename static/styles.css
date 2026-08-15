@@ -53,6 +53,11 @@ button.primary {
   font-weight: 700;
 }
 
+button.danger {
+  color: #ffb4ae;
+  border-color: #a83b35;
+}
+
 .sidebar {
   border-right: 1px solid var(--border);
   background: #181b20;
@@ -287,6 +292,12 @@ h1 {
 .job .job-title {
   font-weight: 700;
   margin-bottom: 6px;
+}
+
+.job-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .settings-panel {
