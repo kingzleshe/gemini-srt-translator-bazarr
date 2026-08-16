@@ -43,18 +43,21 @@ worker API only; it does not talk directly to Bazarr, Gemini, or TMDB.
 
 ## Queue Layout
 
-The queue is a set of JSON files in four directories:
+The queue is a set of JSON files in five directories:
 
 ```text
 queue/
   pending/
   processing/
+  deferred/
   done/
   failed/
 ```
 
-A job file is moved between directories as state changes. A failed job may also
-have a sibling `.error` file containing the exception text.
+A job file is moved between directories as state changes. Deferred and failed
+jobs may also have a sibling `.error` file containing the exception text.
+Deferred jobs record `retry_at`; a persisted `provider-pause.json` circuit
+breaker prevents other work from consuming requests after daily quota exhaustion.
 
 ## Job Shape
 
@@ -81,8 +84,12 @@ have a sibling `.error` file containing the exception text.
 2. Existing output files are skipped to avoid overwriting subtitles.
 3. TMDB context is built when `TMDB_API_KEY` is available.
 4. The worker executes `gst translate`.
-5. On success, the job moves to `done`.
-6. The worker refreshes Bazarr with `scan-disk`; if item IDs are missing, it
+5. A Gemini `503` moves the job to `deferred` for 2, 5, then 15 minutes. After
+   three delayed retries it moves to `failed`.
+6. A daily quota `429` moves the job to `deferred` and pauses the queue for 24
+   hours. Content line-count errors alone retry with the smaller batch size.
+7. On success, the job moves to `done`.
+8. The worker refreshes Bazarr with `scan-disk`; if item IDs are missing, it
    falls back to full subtitle scan tasks.
 
 ## Path Model

@@ -11,7 +11,14 @@ from .subtitles import target_output_path
 
 
 GST_OUTPUT_TAIL_LENGTH = 1000
-GST_RETRY_BATCH_ATTEMPTS = 3
+
+
+class ProviderUnavailableError(RuntimeError):
+    """Gemini is temporarily unavailable and the queue should retry later."""
+
+
+class DailyQuotaExceededError(RuntimeError):
+    """Gemini's per-model daily quota is exhausted."""
 
 
 def build_gst_command(
@@ -23,7 +30,7 @@ def build_gst_command(
 ) -> list[str]:
     settings = gst_settings or {}
     model = str(settings.get("gst_model") or os.getenv("GST_MODEL", "gemini-flash-latest"))
-    batch_size = str(settings.get("gst_batch_size") or os.getenv("GST_BATCH_SIZE", "1000"))
+    batch_size = str(settings.get("gst_batch_size") or os.getenv("GST_BATCH_SIZE", "500"))
     command = [
         "gst",
         "translate",
@@ -91,6 +98,55 @@ def _format_gst_failure(result: subprocess.CompletedProcess[str]) -> str:
     return f"gst failed with exit {result.returncode}: {_result_output_tail(result)}"
 
 
+def _result_output(result: subprocess.CompletedProcess[str]) -> str:
+    return "\n".join(
+        part
+        for part in (
+            str(getattr(result, "stdout", "") or ""),
+            str(getattr(result, "stderr", "") or ""),
+        )
+        if part
+    )
+
+
+def _is_daily_quota_error(output: str) -> bool:
+    lowered = output.lower()
+    daily_markers = (
+        "generaterequestsperdayperprojectpermodel",
+        "per_model_per_day",
+        "per model per day",
+        "requests per day",
+    )
+    return ("429" in lowered or "resource_exhausted" in lowered) and any(
+        marker in lowered for marker in daily_markers
+    )
+
+
+def _is_provider_unavailable(output: str) -> bool:
+    lowered = output.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "503 unavailable",
+            "code': 503",
+            '"code": 503',
+            "currently experiencing high demand",
+            "model is overloaded",
+            "429 resource_exhausted",
+            "code': 429",
+            '"code": 429',
+        )
+    )
+
+
+def _is_content_retry_error(output: str) -> bool:
+    lowered = output.lower()
+    return (
+        ("expected" in lowered and "lines" in lowered and "got" in lowered)
+        or "line count mismatch" in lowered
+    )
+
+
 def _int_setting(settings: dict[str, Any], key: str, env_key: str, default: int) -> int:
     raw_value = settings.get(key)
     if raw_value in (None, ""):
@@ -149,14 +205,8 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
     if temp_output.exists() and not can_resume:
         temp_output.unlink()
 
-    primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 1000)
-    retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 500)
-    resume_fallback_batch_size = _int_setting(
-        settings,
-        "gst_resume_fallback_batch_size",
-        "GST_RESUME_FALLBACK_BATCH_SIZE",
-        50,
-    )
+    primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 500)
+    retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 300)
     command_settings = settings
     command_batch_size = primary_batch_size
     resume_progress_line = _progress_line(progress_path) if can_resume else None
@@ -169,7 +219,6 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
 
     logging.info("Running translation: %s -> %s", input_srt, output_srt)
 
-    same_batch_exit_130_runs = 0
     while True:
         command = build_gst_command(
             input_srt,
@@ -185,11 +234,22 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
             check=False,
             env=translation_environment(settings),
         )
-        if result.returncode != 130 or retry_batch_size <= 0:
+        if result.returncode == 0:
             break
-        if retry_batch_size < command_batch_size:
+        result_output = _result_output(result)
+        failure = _format_gst_failure(result)
+        if _is_daily_quota_error(result_output):
+            raise DailyQuotaExceededError(failure)
+        if _is_provider_unavailable(result_output):
+            raise ProviderUnavailableError(failure)
+        if (
+            result.returncode == 130
+            and _is_content_retry_error(result_output)
+            and retry_batch_size > 0
+            and retry_batch_size < command_batch_size
+        ):
             logging.warning(
-                "gst exited 130 with batch size %s; retrying with batch size %s. %s",
+                "gst returned invalid subtitle content with batch size %s; retrying with batch size %s. %s",
                 command_batch_size,
                 retry_batch_size,
                 _result_output_tail(result),
@@ -198,33 +258,6 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
             command_settings = dict(settings)
             command_settings["gst_batch_size"] = retry_batch_size
             command_batch_size = retry_batch_size
-            same_batch_exit_130_runs = 0
-            continue
-        if (
-            can_resume_from_progress
-            and resume_fallback_batch_size > 0
-            and resume_fallback_batch_size < command_batch_size
-        ):
-            logging.warning(
-                "gst exited 130 while resuming with batch size %s; retrying with resume fallback batch size %s. %s",
-                command_batch_size,
-                resume_fallback_batch_size,
-                _result_output_tail(result),
-            )
-            command_settings = dict(settings)
-            command_settings["gst_batch_size"] = resume_fallback_batch_size
-            command_batch_size = resume_fallback_batch_size
-            same_batch_exit_130_runs = 0
-            continue
-        same_batch_exit_130_runs += 1
-        if same_batch_exit_130_runs < GST_RETRY_BATCH_ATTEMPTS:
-            logging.warning(
-                "gst exited 130 with batch size %s; retrying with the same batch size (%s/%s). %s",
-                command_batch_size,
-                same_batch_exit_130_runs + 1,
-                GST_RETRY_BATCH_ATTEMPTS,
-                _result_output_tail(result),
-            )
             continue
         break
     if result.returncode != 0:

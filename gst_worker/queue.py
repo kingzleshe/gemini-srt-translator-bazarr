@@ -10,7 +10,7 @@ from .config import enabled_target_languages
 from .subtitles import target_output_path
 
 
-QUEUE_STATES = ("pending", "processing", "done", "failed")
+QUEUE_STATES = ("pending", "processing", "deferred", "done", "failed")
 
 
 def should_skip_job(job: dict[str, Any]) -> bool:
@@ -89,7 +89,8 @@ def enqueue_translation_jobs(
         jid = job_id_for(subtitle_path, output_path, target_code)
         pending = Path(queue_dir) / "pending" / f"{jid}.json"
         processing = Path(queue_dir) / "processing" / f"{jid}.json"
-        if pending.exists() or processing.exists():
+        deferred = Path(queue_dir) / "deferred" / f"{jid}.json"
+        if pending.exists() or processing.exists() or deferred.exists():
             continue
         if retry_failed_job(queue_dir, jid):
             created.append(str(pending))
@@ -128,10 +129,12 @@ def queue_snapshot(queue_dir: str, limit: int = 100) -> dict[str, Any]:
                 job = {"job_id": path.stem}
             job["_state"] = state
             job["_path"] = str(path)
-            if state == "failed":
+            if state in {"deferred", "failed"}:
                 error_path = path.with_suffix(".error")
                 if error_path.exists():
                     job["error"] = error_path.read_text(encoding="utf-8")[-2000:]
+                elif job.get("last_error"):
+                    job["error"] = str(job["last_error"])[-2000:]
             jobs.append(job)
         snapshot[state] = jobs
     return snapshot

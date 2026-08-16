@@ -213,7 +213,7 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(saved["gst_model"], "gemini-2.5-flash")
             self.assertEqual(saved["gst_batch_size"], 500)
             self.assertEqual(saved["gst_retry_batch_size"], 250)
-            self.assertEqual(saved["gst_resume_fallback_batch_size"], 50)
+            self.assertNotIn("gst_resume_fallback_batch_size", saved)
             self.assertTrue(saved["gst_paid_quota"])
             self.assertFalse(saved["gst_skip_upgrade"])
             self.assertFalse(saved["gst_quiet"])
@@ -234,9 +234,10 @@ class WorkerTests(unittest.TestCase):
     def test_default_gst_tuning_matches_recommended_automation_profile(self):
         config = worker.normalize_app_config({})
 
-        self.assertEqual(config["gst_batch_size"], 1000)
-        self.assertEqual(config["gst_retry_batch_size"], 500)
-        self.assertEqual(config["gst_resume_fallback_batch_size"], 50)
+        self.assertEqual(config["gst_model"], "gemini-flash-latest")
+        self.assertEqual(config["gst_batch_size"], 500)
+        self.assertEqual(config["gst_retry_batch_size"], 300)
+        self.assertNotIn("gst_resume_fallback_batch_size", config)
         self.assertEqual(config["job_settle_seconds"], 600)
         self.assertEqual(config["gst_temperature"], "0.7")
         self.assertEqual(config["gst_top_p"], "0.95")
@@ -245,6 +246,19 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(config["gst_thinking_level"], "medium")
         self.assertTrue(config["gst_no_streaming"])
         self.assertFalse(config["gst_paid_quota"])
+
+    def test_normalize_app_config_migrates_legacy_three_batch_profile(self):
+        config = worker.normalize_app_config(
+            {
+                "gst_batch_size": 1000,
+                "gst_retry_batch_size": 500,
+                "gst_resume_fallback_batch_size": 50,
+            }
+        )
+
+        self.assertEqual(config["gst_batch_size"], 500)
+        self.assertEqual(config["gst_retry_batch_size"], 300)
+        self.assertNotIn("gst_resume_fallback_batch_size", config)
 
     def test_save_app_config_preserves_blank_secret_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -866,6 +880,108 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue((queue_dir / "done" / "settle-race.json").exists())
             self.assertEqual(output.read_text(encoding="utf-8"), "embedded zh subtitle")
 
+    def test_queue_worker_defers_503_and_retries_only_after_retry_at(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp) / "queue"
+            worker.ensure_queue_dirs(str(queue_dir))
+            job = {
+                "job_id": "overloaded",
+                "created_at": 1_000,
+                "subtitle_path": str(Path(tmp) / "Movie.en.srt"),
+                "output_path": str(Path(tmp) / "Movie.zh.srt"),
+                "source_code": "en",
+                "target_code": "zh",
+            }
+            (queue_dir / "pending" / "overloaded.json").write_text(json.dumps(job), encoding="utf-8")
+            queue_worker = worker.QueueWorker(
+                str(queue_dir),
+                {"job_settle_seconds": 0},
+                worker.MemoryCache(),
+                FakeHTTP({}),
+            )
+
+            with patch(
+                "worker.process_job",
+                side_effect=[worker.ProviderUnavailableError("503 UNAVAILABLE"), "translated"],
+            ) as process_job:
+                self.assertTrue(queue_worker.process_once(now=1_000))
+                deferred_path = queue_dir / "deferred" / "overloaded.json"
+                self.assertTrue(deferred_path.exists())
+                deferred = json.loads(deferred_path.read_text(encoding="utf-8"))
+                self.assertEqual(deferred["retry_at"], 1_120)
+                self.assertEqual(deferred["provider_retry_count"], 1)
+
+                self.assertFalse(queue_worker.process_once(now=1_119))
+                self.assertTrue(queue_worker.process_once(now=1_120))
+
+            self.assertEqual(process_job.call_count, 2)
+            self.assertTrue((queue_dir / "done" / "overloaded.json").exists())
+
+    def test_queue_worker_daily_quota_pauses_other_jobs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp) / "queue"
+            worker.ensure_queue_dirs(str(queue_dir))
+            for job_id in ("first", "second"):
+                job = {
+                    "job_id": job_id,
+                    "created_at": 1_000,
+                    "subtitle_path": str(Path(tmp) / f"{job_id}.en.srt"),
+                    "output_path": str(Path(tmp) / f"{job_id}.zh.srt"),
+                    "source_code": "en",
+                    "target_code": "zh",
+                }
+                (queue_dir / "pending" / f"{job_id}.json").write_text(json.dumps(job), encoding="utf-8")
+            queue_worker = worker.QueueWorker(
+                str(queue_dir),
+                {"job_settle_seconds": 0},
+                worker.MemoryCache(),
+                FakeHTTP({}),
+            )
+
+            with patch(
+                "worker.process_job",
+                side_effect=worker.DailyQuotaExceededError("429 daily quota exhausted"),
+            ) as process_job:
+                self.assertTrue(queue_worker.process_once(now=1_000))
+                self.assertFalse(queue_worker.process_once(now=1_001))
+
+            self.assertEqual(process_job.call_count, 1)
+            pause = json.loads((queue_dir / "provider-pause.json").read_text(encoding="utf-8"))
+            self.assertEqual(pause["retry_at"], 87_400)
+            self.assertEqual(len(list((queue_dir / "deferred").glob("*.json"))), 1)
+            self.assertEqual(len(list((queue_dir / "pending").glob("*.json"))), 1)
+
+    def test_queue_worker_fails_503_after_three_delayed_retries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp) / "queue"
+            worker.ensure_queue_dirs(str(queue_dir))
+            job = {
+                "job_id": "still-overloaded",
+                "created_at": 1_000,
+                "subtitle_path": str(Path(tmp) / "Movie.en.srt"),
+                "output_path": str(Path(tmp) / "Movie.zh.srt"),
+                "source_code": "en",
+                "target_code": "zh",
+                "provider_retry_count": 3,
+            }
+            pending_path = queue_dir / "pending" / "still-overloaded.json"
+            pending_path.write_text(json.dumps(job), encoding="utf-8")
+            queue_worker = worker.QueueWorker(
+                str(queue_dir),
+                {"job_settle_seconds": 0},
+                worker.MemoryCache(),
+                FakeHTTP({}),
+            )
+
+            with patch(
+                "worker.process_job",
+                side_effect=worker.ProviderUnavailableError("503 UNAVAILABLE"),
+            ):
+                self.assertTrue(queue_worker.process_once(now=1_000))
+
+            self.assertTrue((queue_dir / "failed" / "still-overloaded.json").exists())
+            self.assertFalse((queue_dir / "deferred" / "still-overloaded.json").exists())
+
     def test_run_translation_does_not_overwrite_output_created_during_gst(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -971,6 +1087,74 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "1000")
             self.assertEqual(commands[1][commands[1].index("--batch-size") + 1], "500")
 
+    def test_run_translation_does_not_immediately_retry_gemini_503(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            result = type(
+                "Result",
+                (),
+                {
+                    "returncode": 130,
+                    "stdout": (
+                        "Stopping script due to reaching 3 consecutive errors. "
+                        "Last error: 503 UNAVAILABLE. This model is currently experiencing high demand."
+                    ),
+                    "stderr": "",
+                },
+            )()
+
+            with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
+                with self.assertRaises(worker.ProviderUnavailableError):
+                    worker.run_translation(
+                        {
+                            "subtitle_path": str(subtitle),
+                            "output_path": str(output),
+                            "target_code": "zh",
+                            "target_language": "Simplified Chinese",
+                        },
+                        "",
+                        {"gemini_api_key": "secret", "gst_batch_size": 500, "gst_retry_batch_size": 300},
+                    )
+
+            self.assertEqual(run.call_count, 1)
+
+    def test_run_translation_does_not_retry_daily_quota_exhaustion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            result = type(
+                "Result",
+                (),
+                {
+                    "returncode": 130,
+                    "stdout": (
+                        "429 RESOURCE_EXHAUSTED: Quota exceeded for metric "
+                        "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+                    ),
+                    "stderr": "",
+                },
+            )()
+
+            with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
+                with self.assertRaises(worker.DailyQuotaExceededError):
+                    worker.run_translation(
+                        {
+                            "subtitle_path": str(subtitle),
+                            "output_path": str(output),
+                            "target_code": "zh",
+                            "target_language": "Simplified Chinese",
+                        },
+                        "",
+                        {"gemini_api_key": "secret", "gst_batch_size": 500, "gst_retry_batch_size": 300},
+                    )
+
+            self.assertEqual(run.call_count, 1)
+
     def test_run_translation_resumes_with_retry_batch_size(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1006,7 +1190,7 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "500")
             self.assertEqual(output.read_text(encoding="utf-8"), "finished from resume")
 
-    def test_run_translation_retries_resume_with_same_retry_batch_size(self):
+    def test_run_translation_does_not_retry_unknown_resume_exit_130(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             subtitle = root / "Movie.en.srt"
@@ -1020,38 +1204,31 @@ class WorkerTests(unittest.TestCase):
 
             def fake_run(command, **kwargs):
                 commands.append(command)
-                temp_output = Path(command[command.index("-o") + 1])
-                if len(commands) < 3:
-                    self.assertTrue(partial.exists())
-                    self.assertTrue(progress.exists())
-                    return type("Result", (), {"returncode": 130, "stdout": "", "stderr": ""})()
-
-                temp_output.write_text("finished after fixed retry", encoding="utf-8")
-                return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+                self.assertTrue(partial.exists())
+                self.assertTrue(progress.exists())
+                return type("Result", (), {"returncode": 130, "stdout": "", "stderr": ""})()
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                status = worker.run_translation(
-                    {
-                        "subtitle_path": str(subtitle),
-                        "output_path": str(output),
-                        "target_code": "zh",
-                        "target_language": "Simplified Chinese",
-                    },
-                    "",
-                    {
-                        "gemini_api_key": "secret",
-                        "gst_batch_size": 1000,
-                        "gst_retry_batch_size": 500,
-                        "gst_resume_fallback_batch_size": 0,
-                    },
-                )
+                with self.assertRaises(RuntimeError):
+                    worker.run_translation(
+                        {
+                            "subtitle_path": str(subtitle),
+                            "output_path": str(output),
+                            "target_code": "zh",
+                            "target_language": "Simplified Chinese",
+                        },
+                        "",
+                        {
+                            "gemini_api_key": "secret",
+                            "gst_batch_size": 500,
+                            "gst_retry_batch_size": 300,
+                        },
+                    )
 
-            self.assertEqual(status, "translated")
-            self.assertEqual(len(commands), 3)
-            self.assertEqual([command[command.index("--batch-size") + 1] for command in commands], ["500", "500", "500"])
-            self.assertEqual(output.read_text(encoding="utf-8"), "finished after fixed retry")
+            self.assertEqual(len(commands), 1)
+            self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "300")
 
-    def test_run_translation_uses_resume_fallback_batch_after_resume_exit_130(self):
+    def test_run_translation_defers_overloaded_resume_without_further_batch_reduction(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             subtitle = root / "Movie.en.srt"
@@ -1075,26 +1252,24 @@ class WorkerTests(unittest.TestCase):
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                status = worker.run_translation(
-                    {
-                        "subtitle_path": str(subtitle),
-                        "output_path": str(output),
-                        "target_code": "zh",
-                        "target_language": "Simplified Chinese",
-                    },
-                    "",
-                    {
-                        "gemini_api_key": "secret",
-                        "gst_batch_size": 1000,
-                        "gst_retry_batch_size": 500,
-                        "gst_resume_fallback_batch_size": 50,
-                    },
-                )
+                with self.assertRaises(worker.ProviderUnavailableError):
+                    worker.run_translation(
+                        {
+                            "subtitle_path": str(subtitle),
+                            "output_path": str(output),
+                            "target_code": "zh",
+                            "target_language": "Simplified Chinese",
+                        },
+                        "",
+                        {
+                            "gemini_api_key": "secret",
+                            "gst_batch_size": 500,
+                            "gst_retry_batch_size": 300,
+                        },
+                    )
 
-            self.assertEqual(status, "translated")
-            self.assertEqual(len(commands), 2)
-            self.assertEqual([command[command.index("--batch-size") + 1] for command in commands], ["500", "50"])
-            self.assertEqual(output.read_text(encoding="utf-8"), "finished after resume fallback")
+            self.assertEqual(len(commands), 1)
+            self.assertEqual(commands[0][commands[0].index("--batch-size") + 1], "300")
 
     def test_run_translation_failure_reports_stdout_tail(self):
         with tempfile.TemporaryDirectory() as tmp:

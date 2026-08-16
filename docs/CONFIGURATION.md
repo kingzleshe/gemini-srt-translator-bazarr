@@ -19,9 +19,8 @@ Copy `.env.example` to `.env` and edit values for your host.
 | `BAZARR_POSTPROCESS_DIR` | Yes | `/opt/docker/bazarr/postprocess` | Shared post-processing and queue directory. |
 | `WORKER_STATE_DIR` | Yes | `/opt/docker/gemini-srt-translator-bazarr` | Worker state, config, logs, and cache. |
 | `GST_MODEL` | No | `gemini-flash-latest` | Model passed to `gst translate --model`. |
-| `GST_BATCH_SIZE` | No | `1000` | Batch size passed to `gst translate --batch-size`. |
-| `GST_RETRY_BATCH_SIZE` | No | `500` | Fallback batch size used after a `gst` exit 130; fallback runs are retried with the same batch size up to 3 times. Set `0` to disable fallback retry. |
-| `GST_RESUME_FALLBACK_BATCH_SIZE` | No | `50` | Temporary resume-only fallback batch size used when a trusted partial/progress resume fails again at `GST_RETRY_BATCH_SIZE`. Set `0` to disable. |
+| `GST_BATCH_SIZE` | No | `500` | Batch size passed to `gst translate --batch-size`. |
+| `GST_RETRY_BATCH_SIZE` | No | `300` | Smaller batch used only after a subtitle line-count/content error. Set `0` to disable. |
 | `GST_TARGET_LANGUAGE` | No | `Simplified Chinese` | Legacy fallback when a job has no target language. |
 | `WORKER_SLEEP_SECONDS` | No | `15` | Delay between queue polling cycles. |
 | `HTTP_TIMEOUT_SECONDS` | No | `20` | Timeout for Bazarr and TMDB HTTP calls. |
@@ -122,9 +121,8 @@ Default:
   "gemini_api_key2": "",
   "tmdb_api_key": "",
   "gst_model": "gemini-flash-latest",
-  "gst_batch_size": 1000,
-  "gst_retry_batch_size": 500,
-  "gst_resume_fallback_batch_size": 50,
+  "gst_batch_size": 500,
+  "gst_retry_batch_size": 300,
   "gst_paid_quota": false,
   "gst_skip_upgrade": true,
   "gst_quiet": true,
@@ -163,16 +161,10 @@ The Settings page writes these `gst translate` options into app config:
 
 - `gst_model`: selected from `/api/gemini-models`; passed to `--model`.
 - `gst_batch_size`: passed to `--batch-size`.
-- `gst_retry_batch_size`: when `gst` exits 130 and this value is smaller than
-  `gst_batch_size`, the worker clears unsafe retry state and reruns the job with
-  this smaller `--batch-size`; if that fallback exits 130 again, the worker
-  keeps retrying the same fallback batch size up to 3 total fallback attempts.
-  Set to `0` to disable the fallback.
-- `gst_resume_fallback_batch_size`: temporary workaround for upstream resume
-  behavior. When a trusted `.partial.srt` plus `.progress` resume starts with
-  `gst_retry_batch_size` and exits 130 again, the worker retries with this
-  smaller fixed `--batch-size` and then keeps retrying that same size. Set to
-  `0` to disable this resume-only fallback.
+- `gst_retry_batch_size`: used only when `gst` reports invalid subtitle content,
+  such as an output line-count mismatch. Provider `429` and `503` errors never
+  reduce the batch size or trigger an immediate subprocess retry. Set to `0` to
+  disable the content fallback.
 - `gst_paid_quota`: enables `--paid-quota`.
 - `gst_skip_upgrade`: enables `--skip-upgrade`.
 - `gst_quiet`: enables `--quiet`.

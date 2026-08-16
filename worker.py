@@ -82,7 +82,17 @@ from gst_worker.tmdb import (
     tmdb_find_movie_id,
     tmdb_find_tv_id,
 )
-from gst_worker.translation import build_gst_command, run_translation, translation_environment
+from gst_worker.translation import (
+    DailyQuotaExceededError,
+    ProviderUnavailableError,
+    build_gst_command,
+    run_translation,
+    translation_environment,
+)
+
+
+PROVIDER_RETRY_DELAYS = (120, 300, 900)
+DAILY_QUOTA_PAUSE_SECONDS = 86_400
 
 
 def load_settings(config_path: str | None = None) -> dict[str, Any]:
@@ -112,13 +122,12 @@ def load_settings(config_path: str | None = None) -> dict[str, Any]:
         settings[key] = str(app_config.get(key) or "").strip()
     for key in GST_BOOL_CONFIG_KEYS:
         settings[key] = bool(app_config.get(key))
-    settings["gst_batch_size"] = int(app_config.get("gst_batch_size") or 1000)
-    settings["gst_retry_batch_size"] = int(app_config.get("gst_retry_batch_size", 500))
-    settings["gst_resume_fallback_batch_size"] = int(app_config.get("gst_resume_fallback_batch_size", 50))
+    settings["gst_batch_size"] = int(app_config.get("gst_batch_size") or 500)
+    settings["gst_retry_batch_size"] = int(app_config.get("gst_retry_batch_size", 300))
     settings["gst_model"] = str(app_config.get("gst_model") or os.getenv("GST_MODEL", "gemini-flash-latest"))
     settings["job_settle_seconds"] = int(app_config.get("job_settle_seconds") or 0)
     if os.getenv("GST_BATCH_SIZE") and not app_config.get("gst_batch_size"):
-        settings["gst_batch_size"] = int(os.getenv("GST_BATCH_SIZE", "1000"))
+        settings["gst_batch_size"] = int(os.getenv("GST_BATCH_SIZE", "500"))
     return settings
 
 
@@ -188,11 +197,49 @@ class QueueWorker:
         self.settings = settings
         self.cache = cache
         self.http = http
-        for name in ("pending", "processing", "done", "failed"):
-            (self.queue_dir / name).mkdir(parents=True, exist_ok=True)
+        ensure_queue_dirs(str(self.queue_dir))
+
+    @property
+    def provider_pause_path(self) -> Path:
+        return self.queue_dir / "provider-pause.json"
+
+    def provider_pause_until(self, now: float) -> float | None:
+        if not self.provider_pause_path.exists():
+            return None
+        try:
+            pause = json.loads(self.provider_pause_path.read_text(encoding="utf-8"))
+            retry_at = float(pause.get("retry_at") or 0)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            self.provider_pause_path.unlink(missing_ok=True)
+            return None
+        if retry_at > now:
+            return retry_at
+        self.provider_pause_path.unlink(missing_ok=True)
+        return None
+
+    def promote_deferred_jobs(self, now: float) -> None:
+        for deferred_path in sorted(
+            (self.queue_dir / "deferred").glob("*.json"),
+            key=lambda path: path.stat().st_mtime,
+        ):
+            try:
+                job = json.loads(deferred_path.read_text(encoding="utf-8"))
+                retry_at = float(job.get("retry_at") or 0)
+            except Exception:
+                retry_at = 0
+            if retry_at > now:
+                continue
+            pending_path = self.queue_dir / "pending" / deferred_path.name
+            if pending_path.exists():
+                continue
+            deferred_path.replace(pending_path)
+            deferred_path.with_suffix(".error").unlink(missing_ok=True)
 
     def ready_job_path(self, now: float | None = None) -> Path | None:
         current_time = time.time() if now is None else now
+        if self.provider_pause_until(current_time) is not None:
+            return None
+        self.promote_deferred_jobs(current_time)
         settle_seconds = max(0, int(self.settings.get("job_settle_seconds") or 0))
         jobs = sorted((self.queue_dir / "pending").glob("*.json"), key=lambda path: path.stat().st_mtime)
         for job_path in jobs:
@@ -206,7 +253,8 @@ class QueueWorker:
         return None
 
     def process_once(self, now: float | None = None) -> bool:
-        job_path = self.ready_job_path(now=now)
+        current_time = time.time() if now is None else now
+        job_path = self.ready_job_path(now=current_time)
         if job_path is None:
             return False
 
@@ -219,8 +267,53 @@ class QueueWorker:
         try:
             job = json.loads(processing_path.read_text(encoding="utf-8"))
             status = process_job(job, self.settings, self.cache, self.http)
+            for key in ("retry_at", "deferred_reason", "last_error", "provider_retry_count"):
+                job.pop(key, None)
+            processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
             destination = self.queue_dir / "done" / processing_path.name
             logging.info("Job %s finished with status: %s", processing_path.name, status)
+        except DailyQuotaExceededError as exc:
+            retry_at = current_time + DAILY_QUOTA_PAUSE_SECONDS
+            job["retry_at"] = retry_at
+            job["deferred_reason"] = "daily-quota"
+            job["last_error"] = str(exc)
+            processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+            destination = self.queue_dir / "deferred" / processing_path.name
+            destination.with_suffix(".error").write_text(str(exc), encoding="utf-8")
+            self.provider_pause_path.write_text(
+                json.dumps(
+                    {"retry_at": retry_at, "reason": "daily-quota", "error": str(exc)},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            logging.warning("Daily Gemini quota exhausted; queue paused until %s", int(retry_at))
+        except ProviderUnavailableError as exc:
+            retry_count = int(job.get("provider_retry_count") or 0) + 1
+            if retry_count <= len(PROVIDER_RETRY_DELAYS):
+                retry_at = current_time + PROVIDER_RETRY_DELAYS[retry_count - 1]
+                job["provider_retry_count"] = retry_count
+                job["retry_at"] = retry_at
+                job["deferred_reason"] = "provider-unavailable"
+                job["last_error"] = str(exc)
+                processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+                destination = self.queue_dir / "deferred" / processing_path.name
+                destination.with_suffix(".error").write_text(str(exc), encoding="utf-8")
+                logging.warning(
+                    "Gemini unavailable; job %s deferred until %s (retry %s/%s)",
+                    processing_path.name,
+                    int(retry_at),
+                    retry_count,
+                    len(PROVIDER_RETRY_DELAYS),
+                )
+            else:
+                destination = self.queue_dir / "failed" / processing_path.name
+                destination.with_suffix(".error").write_text(str(exc), encoding="utf-8")
+                logging.error(
+                    "Gemini remained unavailable after %s delayed retries; job %s failed",
+                    len(PROVIDER_RETRY_DELAYS),
+                    processing_path.name,
+                )
         except Exception as exc:
             destination = self.queue_dir / "failed" / processing_path.name
             error_path = destination.with_suffix(".error")

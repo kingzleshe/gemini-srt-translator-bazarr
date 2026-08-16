@@ -1,3 +1,11 @@
+# 2026-08-17
+- Classified Gemini daily quota and provider-unavailable failures instead of
+  treating every `gst` exit 130 as a subtitle-content retry.
+- Added deferred queue retries for `503` responses and a persisted 24-hour
+  circuit breaker for daily quota exhaustion.
+- Changed translation batches to two levels, `500` and `300`, while retaining
+  `gemini-flash-latest` as the default model.
+
 # 2026-07-23
 - Fixed the dependency constraint test so compatible Dependabot 3.x update PRs
   do not fail CI when the minimum version changes.

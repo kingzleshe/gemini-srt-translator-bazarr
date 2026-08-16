@@ -80,6 +80,7 @@ async function loadStatus() {
   const queue = status.queue || {};
   document.getElementById("metric-pending").textContent = queue.pending || 0;
   document.getElementById("metric-processing").textContent = queue.processing || 0;
+  document.getElementById("metric-deferred").textContent = queue.deferred || 0;
   document.getElementById("metric-done").textContent = queue.done || 0;
   document.getElementById("metric-failed").textContent = queue.failed || 0;
   state.settings = status.settings;
@@ -242,9 +243,8 @@ function fillSettings(settings) {
     ? "TMDB API key is configured."
     : "No TMDB API key configured.";
   renderModelSelect(settings.gst_model);
-  document.getElementById("gst-batch-size-input").value = settings.gst_batch_size || 1000;
-  document.getElementById("gst-retry-batch-size-input").value = settings.gst_retry_batch_size ?? 500;
-  document.getElementById("gst-resume-fallback-batch-size-input").value = settings.gst_resume_fallback_batch_size ?? 50;
+  document.getElementById("gst-batch-size-input").value = settings.gst_batch_size || 500;
+  document.getElementById("gst-retry-batch-size-input").value = settings.gst_retry_batch_size ?? 300;
   document.getElementById("job-settle-seconds-input").value = settings.job_settle_seconds ?? 600;
   document.getElementById("gst-paid-quota-input").checked = Boolean(settings.gst_paid_quota);
   document.getElementById("gst-skip-upgrade-input").checked = settings.gst_skip_upgrade !== false;
@@ -278,11 +278,8 @@ function parseSettings() {
     gemini_api_key2: document.getElementById("gemini-api-key2-input").value.trim(),
     tmdb_api_key: document.getElementById("tmdb-api-key-input").value.trim(),
     gst_model: document.getElementById("gst-model-select").value,
-    gst_batch_size: Number(document.getElementById("gst-batch-size-input").value || 1000),
+    gst_batch_size: Number(document.getElementById("gst-batch-size-input").value || 500),
     gst_retry_batch_size: Number(document.getElementById("gst-retry-batch-size-input").value || 0),
-    gst_resume_fallback_batch_size: Number(
-      document.getElementById("gst-resume-fallback-batch-size-input").value || 0,
-    ),
     job_settle_seconds: Number(document.getElementById("job-settle-seconds-input").value || 0),
     gst_paid_quota: document.getElementById("gst-paid-quota-input").checked,
     gst_skip_upgrade: document.getElementById("gst-skip-upgrade-input").checked,
@@ -411,7 +408,7 @@ async function loadQueue() {
   const snapshot = await api("/api/queue");
   const el = document.getElementById("queue-list");
   el.innerHTML = "";
-  ["pending", "processing", "done", "failed"].forEach((name) => {
+  ["pending", "processing", "deferred", "done", "failed"].forEach((name) => {
     const col = document.createElement("div");
     col.className = "queue-col";
     col.innerHTML = `<h3>${name} (${snapshot.counts[name] || 0})</h3>`;
@@ -421,6 +418,7 @@ async function loadQueue() {
       card.innerHTML = `
         <div class="job-title">${job.source_code || "?"} -> ${job.target_code || "?"}</div>
         <div class="muted">${job.subtitle_path || job.job_id}</div>
+        ${name === "deferred" && job.retry_at ? `<div class="muted">Retry after ${formatDate(job.retry_at)}</div>` : ""}
         ${job.error ? `<div class="status-warn">${job.error}</div>` : ""}
       `;
       if (name === "failed") {
@@ -442,6 +440,19 @@ async function loadQueue() {
         };
         actions.append(retry, cancel);
         card.appendChild(actions);
+      } else if (name === "deferred") {
+        const cancel = document.createElement("button");
+        cancel.textContent = "Cancel";
+        cancel.className = "danger";
+        cancel.onclick = async () => {
+          if (!window.confirm("Cancel this deferred translation? It will not be retried.")) return;
+          await api("/api/queue/delete", {
+            method: "POST",
+            body: JSON.stringify({ state: "deferred", job_id: job.job_id }),
+          });
+          await refresh();
+        };
+        card.appendChild(cancel);
       }
       col.appendChild(card);
     });

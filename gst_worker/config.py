@@ -54,9 +54,8 @@ DEFAULT_APP_CONFIG = {
     "gemini_api_key2": "",
     "tmdb_api_key": "",
     "gst_model": "gemini-flash-latest",
-    "gst_batch_size": 1000,
-    "gst_retry_batch_size": 500,
-    "gst_resume_fallback_batch_size": 50,
+    "gst_batch_size": 500,
+    "gst_retry_batch_size": 300,
     "gst_paid_quota": False,
     "gst_skip_upgrade": True,
     "gst_quiet": True,
@@ -111,6 +110,14 @@ def normalize_app_config(config: dict[str, Any]) -> dict[str, Any]:
             normalized[key] = value
     if isinstance(config, dict):
         normalized.update({key: value for key, value in config.items() if key in normalized})
+        legacy_batch_profile = (
+            str(config.get("gst_batch_size", "")) == "1000"
+            and str(config.get("gst_retry_batch_size", "")) == "500"
+            and str(config.get("gst_resume_fallback_batch_size", "")) == "50"
+        )
+        if legacy_batch_profile:
+            normalized["gst_batch_size"] = 500
+            normalized["gst_retry_batch_size"] = 300
     normalized["source_languages"] = enabled_source_languages(normalized)
     normalized["target_languages"] = enabled_target_languages(normalized)
     media_roots = normalized.get("media_roots")
@@ -130,20 +137,13 @@ def normalize_app_config(config: dict[str, Any]) -> dict[str, Any]:
     for key in GST_BOOL_CONFIG_KEYS:
         normalized[key] = bool(normalized.get(key))
     try:
-        normalized["gst_batch_size"] = max(1, int(normalized.get("gst_batch_size", 1000)))
+        normalized["gst_batch_size"] = max(1, int(normalized.get("gst_batch_size", 500)))
     except (TypeError, ValueError):
-        normalized["gst_batch_size"] = 1000
+        normalized["gst_batch_size"] = 500
     try:
-        normalized["gst_retry_batch_size"] = max(0, int(normalized.get("gst_retry_batch_size", 500)))
+        normalized["gst_retry_batch_size"] = max(0, int(normalized.get("gst_retry_batch_size", 300)))
     except (TypeError, ValueError):
-        normalized["gst_retry_batch_size"] = 500
-    try:
-        normalized["gst_resume_fallback_batch_size"] = max(
-            0,
-            int(normalized.get("gst_resume_fallback_batch_size", 50)),
-        )
-    except (TypeError, ValueError):
-        normalized["gst_resume_fallback_batch_size"] = 50
+        normalized["gst_retry_batch_size"] = 300
     try:
         normalized["job_settle_seconds"] = max(0, int(normalized.get("job_settle_seconds", 600)))
     except (TypeError, ValueError):

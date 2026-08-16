@@ -67,6 +67,16 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("/api/queue/cancel", app_js)
         self.assertIn("Cancel this failed translation?", app_js)
 
+    def test_deferred_jobs_show_retry_time_and_support_cancellation(self):
+        html = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="metric-deferred"', html)
+        self.assertIn('["pending", "processing", "deferred", "done", "failed"]', app_js)
+        self.assertIn("Retry after", app_js)
+        self.assertIn('state: "deferred"', app_js)
+        self.assertNotIn('id="gst-resume-fallback-batch-size-input"', html)
+
     def test_backup_ui_supports_download_and_import(self):
         app_js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
 
