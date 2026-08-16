@@ -273,7 +273,8 @@ class QueueWorker:
             destination = self.queue_dir / "done" / processing_path.name
             logging.info("Job %s finished with status: %s", processing_path.name, status)
         except DailyQuotaExceededError as exc:
-            retry_at = current_time + DAILY_QUOTA_PAUSE_SECONDS
+            failure_time = time.time()
+            retry_at = failure_time + DAILY_QUOTA_PAUSE_SECONDS
             job["retry_at"] = retry_at
             job["deferred_reason"] = "daily-quota"
             job["last_error"] = str(exc)
@@ -291,7 +292,8 @@ class QueueWorker:
         except ProviderUnavailableError as exc:
             retry_count = int(job.get("provider_retry_count") or 0) + 1
             if retry_count <= len(PROVIDER_RETRY_DELAYS):
-                retry_at = current_time + PROVIDER_RETRY_DELAYS[retry_count - 1]
+                failure_time = time.time()
+                retry_at = failure_time + PROVIDER_RETRY_DELAYS[retry_count - 1]
                 job["provider_retry_count"] = retry_count
                 job["retry_at"] = retry_at
                 job["deferred_reason"] = "provider-unavailable"

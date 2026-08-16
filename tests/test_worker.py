@@ -903,16 +903,16 @@ class WorkerTests(unittest.TestCase):
             with patch(
                 "worker.process_job",
                 side_effect=[worker.ProviderUnavailableError("503 UNAVAILABLE"), "translated"],
-            ) as process_job:
+            ) as process_job, patch("worker.time.time", return_value=1_300):
                 self.assertTrue(queue_worker.process_once(now=1_000))
                 deferred_path = queue_dir / "deferred" / "overloaded.json"
                 self.assertTrue(deferred_path.exists())
                 deferred = json.loads(deferred_path.read_text(encoding="utf-8"))
-                self.assertEqual(deferred["retry_at"], 1_120)
+                self.assertEqual(deferred["retry_at"], 1_420)
                 self.assertEqual(deferred["provider_retry_count"], 1)
 
-                self.assertFalse(queue_worker.process_once(now=1_119))
-                self.assertTrue(queue_worker.process_once(now=1_120))
+                self.assertFalse(queue_worker.process_once(now=1_419))
+                self.assertTrue(queue_worker.process_once(now=1_420))
 
             self.assertEqual(process_job.call_count, 2)
             self.assertTrue((queue_dir / "done" / "overloaded.json").exists())
@@ -941,7 +941,7 @@ class WorkerTests(unittest.TestCase):
             with patch(
                 "worker.process_job",
                 side_effect=worker.DailyQuotaExceededError("429 daily quota exhausted"),
-            ) as process_job:
+            ) as process_job, patch("worker.time.time", return_value=1_000):
                 self.assertTrue(queue_worker.process_once(now=1_000))
                 self.assertFalse(queue_worker.process_once(now=1_001))
 
