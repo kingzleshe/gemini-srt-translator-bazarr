@@ -846,6 +846,35 @@ class WorkerTests(unittest.TestCase):
             self.assertFalse((queue_dir / "pending" / "cancel-me.json").exists())
             self.assertFalse(worker.cancel_failed_job(str(queue_dir), "cancel-me"))
 
+    def test_retry_failed_job_starts_a_fresh_provider_retry_cycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp)
+            failed_dir = queue_dir / "failed"
+            failed_dir.mkdir()
+            failed = failed_dir / "retry-me.json"
+            failed.write_text(
+                json.dumps(
+                    {
+                        "job_id": "retry-me",
+                        "provider_retry_count": 3,
+                        "retry_at": 1_234,
+                        "deferred_reason": "provider-unavailable",
+                        "last_error": "503 UNAVAILABLE",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            failed.with_suffix(".error").write_text("503 UNAVAILABLE", encoding="utf-8")
+
+            self.assertTrue(worker.retry_failed_job(str(queue_dir), "retry-me"))
+
+            pending = json.loads((queue_dir / "pending" / "retry-me.json").read_text(encoding="utf-8"))
+            self.assertNotIn("provider_retry_count", pending)
+            self.assertNotIn("retry_at", pending)
+            self.assertNotIn("deferred_reason", pending)
+            self.assertNotIn("last_error", pending)
+            self.assertFalse((queue_dir / "pending" / "retry-me.error").exists())
+
     def test_queue_worker_waits_for_settle_window_before_translation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

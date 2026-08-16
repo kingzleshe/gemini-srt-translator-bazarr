@@ -47,6 +47,15 @@ def retry_failed_job(queue_dir: str, job_id: str) -> bool:
     if not failed.exists() or pending.exists():
         return False
     error = failed.with_suffix(".error")
+    try:
+        job = json.loads(failed.read_text(encoding="utf-8"))
+        for key in ("provider_retry_count", "retry_at", "deferred_reason", "last_error"):
+            job.pop(key, None)
+        retry_tmp = failed.with_name(f".{job_id}.retry.tmp")
+        retry_tmp.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+        retry_tmp.replace(failed)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
     failed.replace(pending)
     if error.exists():
         error.unlink()
