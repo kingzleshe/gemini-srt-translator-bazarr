@@ -277,7 +277,7 @@ wheels = [
 
 [[package]]
 name = "gemini-srt-translator"
-version = "3.7.0"
+version = "3.7.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "audioop-lts", marker = "python_full_version >= '3.13'" },
@@ -287,9 +287,9 @@ dependencies = [
     { name = "pydub" },
     { name = "pysubs2" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ba/cf/6f60708d1e639befc5902dcd74888c8be8d94bb218a08d3eab7d3266717d/gemini_srt_translator-3.7.0.tar.gz", hash = "sha256:3414d12c4d88a0cd4c830d54fe2c598d5210420622a247fac56800de20c5dc41", size = 50489, upload-time = "2026-08-13T19:20:09.072Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/33/f92b4b06c6cf95d0a73b927ba9f52fe2962dbecd392a2b8ac9cd2024c115/gemini_srt_translator-3.7.1.tar.gz", hash = "sha256:fb75bcf57cffab105c02aa41b260efd3db65f6cbbc0ac5bc59f4a9548db7e1e0", size = 50568, upload-time = "2026-08-20T12:36:37.502Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1a/04/9971ab4c65c6f10e3d5257f386ef5e30675fd3a4f7a86ccee54a3133aafc/gemini_srt_translator-3.7.0-py3-none-any.whl", hash = "sha256:30b63a2846d43ef81ce861f0f37f1d79c844591a573383979d255c177d64b892", size = 45252, upload-time = "2026-08-13T19:20:10.048Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/69/b1d8d47b9aa668563147e9946f7ae297641104a1b1216bf2c13dd986668b/gemini_srt_translator-3.7.1-py3-none-any.whl", hash = "sha256:c234d0b1640d06bbf0b8a8f060bd91b404cfa8206ddeb7bc046d92bc4ae6f3f4", size = 45306, upload-time = "2026-08-20T12:36:36.299Z" },
 ]
 
 [[package]]
