@@ -33,7 +33,6 @@ GST_BOOL_CONFIG_KEYS = (
     "gst_token_report",
     "gst_no_streaming",
     "gst_no_thinking",
-    "gst_no_context",
 )
 GST_STRING_CONFIG_KEYS = (
     "gst_model",
@@ -69,7 +68,7 @@ DEFAULT_APP_CONFIG = {
     "gst_thinking_level": "medium",
     "gst_no_streaming": True,
     "gst_no_thinking": False,
-    "gst_no_context": False,
+    "gst_context_size": 50,
     "job_settle_seconds": 600,
 }
 
@@ -144,6 +143,10 @@ def normalize_app_config(config: dict[str, Any]) -> dict[str, Any]:
         normalized["gst_retry_batch_size"] = max(0, int(normalized.get("gst_retry_batch_size", 300)))
     except (TypeError, ValueError):
         normalized["gst_retry_batch_size"] = 300
+    try:
+        normalized["gst_context_size"] = max(0, int(normalized.get("gst_context_size", 50)))
+    except (TypeError, ValueError):
+        normalized["gst_context_size"] = 50
     try:
         normalized["job_settle_seconds"] = max(0, int(normalized.get("job_settle_seconds", 600)))
     except (TypeError, ValueError):

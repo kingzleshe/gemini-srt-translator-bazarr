@@ -255,11 +255,11 @@ function fillSettings(settings) {
   document.getElementById("gst-temperature-input").value = settings.gst_temperature || "";
   document.getElementById("gst-top-p-input").value = settings.gst_top_p || "";
   document.getElementById("gst-top-k-input").value = settings.gst_top_k || "";
+  document.getElementById("gst-context-size-input").value = settings.gst_context_size ?? 50;
   document.getElementById("gst-thinking-budget-input").value = settings.gst_thinking_budget || "";
   document.getElementById("gst-thinking-level-select").value = settings.gst_thinking_level || "";
   document.getElementById("gst-no-streaming-input").checked = Boolean(settings.gst_no_streaming);
   document.getElementById("gst-no-thinking-input").checked = Boolean(settings.gst_no_thinking);
-  document.getElementById("gst-no-context-input").checked = Boolean(settings.gst_no_context);
   document.getElementById("roots-input").value = (settings.media_roots || []).join("\n");
   document.getElementById("scan-limit-input").value = settings.scan_limit || 200;
   renderSelectedLanguages("source");
@@ -290,11 +290,11 @@ function parseSettings() {
     gst_temperature: document.getElementById("gst-temperature-input").value.trim(),
     gst_top_p: document.getElementById("gst-top-p-input").value.trim(),
     gst_top_k: document.getElementById("gst-top-k-input").value.trim(),
+    gst_context_size: Number(document.getElementById("gst-context-size-input").value || 50),
     gst_thinking_budget: document.getElementById("gst-thinking-budget-input").value.trim(),
     gst_thinking_level: document.getElementById("gst-thinking-level-select").value,
     gst_no_streaming: document.getElementById("gst-no-streaming-input").checked,
     gst_no_thinking: document.getElementById("gst-no-thinking-input").checked,
-    gst_no_context: document.getElementById("gst-no-context-input").checked,
     source_languages: state.selectedSources,
     target_languages: state.selectedTargets,
     media_roots: roots,

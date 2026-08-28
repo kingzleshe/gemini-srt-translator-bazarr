@@ -106,7 +106,7 @@ current stored key.
   "gst_thinking_level": "medium",
   "gst_no_streaming": true,
   "gst_no_thinking": false,
-  "gst_no_context": false,
+  "gst_context_size": 50,
   "job_settle_seconds": 600,
   "source_languages": [
     {"code": "en", "language": "English", "enabled": true},

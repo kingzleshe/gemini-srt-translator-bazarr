@@ -136,7 +136,7 @@ Default:
   "gst_thinking_level": "medium",
   "gst_no_streaming": true,
   "gst_no_thinking": false,
-  "gst_no_context": false,
+  "gst_context_size": 50,
   "job_settle_seconds": 600
 }
 ```
@@ -174,8 +174,9 @@ The Settings page writes these `gst translate` options into app config:
   token and cost report JSON next to the input subtitle by default.
 - `gst_temperature`, `gst_top_p`, `gst_top_k`: model tuning values.
 - `gst_thinking_budget`, `gst_thinking_level`: thinking controls.
-- `gst_no_streaming`, `gst_no_thinking`, `gst_no_context`: boolean CLI
-  switches.
+- `gst_no_streaming`, `gst_no_thinking`: boolean CLI switches.
+- `gst_context_size`: preceding subtitle lines supplied as translation context;
+  defaults to `50`, while `0` disables context.
 - `job_settle_seconds`: queue settle window before a new job can run. Default
   is `600` seconds so Bazarr has time to finish extracting other embedded
   subtitles from the same media file.

@@ -205,7 +205,7 @@ class WorkerTests(unittest.TestCase):
                     "gst_no_thinking": True,
                     "gst_token_report": True,
                     "gst_token_stats": True,
-                    "gst_no_context": True,
+                    "gst_context_size": 80,
                     "job_settle_seconds": 600,
                 },
             )
@@ -228,11 +228,11 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue(saved["gst_no_thinking"])
             self.assertTrue(saved["gst_token_report"])
             self.assertNotIn("gst_token_stats", saved)
-            self.assertTrue(saved["gst_no_context"])
+            self.assertEqual(saved["gst_context_size"], 80)
             self.assertEqual(saved["job_settle_seconds"], 600)
 
     def test_default_gst_tuning_matches_recommended_automation_profile(self):
-        config = worker.normalize_app_config({})
+        config = worker.normalize_app_config({"gst_no_context": True})
 
         self.assertEqual(config["gst_model"], "gemini-flash-latest")
         self.assertEqual(config["gst_batch_size"], 500)
@@ -246,6 +246,8 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(config["gst_thinking_level"], "medium")
         self.assertTrue(config["gst_no_streaming"])
         self.assertFalse(config["gst_paid_quota"])
+        self.assertEqual(config["gst_context_size"], 50)
+        self.assertNotIn("gst_no_context", config)
 
     def test_normalize_app_config_migrates_legacy_three_batch_profile(self):
         config = worker.normalize_app_config(
@@ -1482,7 +1484,7 @@ class WorkerTests(unittest.TestCase):
                 "gst_no_thinking": True,
                 "gst_token_report": True,
                 "gst_token_stats": True,
-                "gst_no_context": True,
+                "gst_context_size": 80,
             },
         )
 
@@ -1495,7 +1497,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIn("--no-thinking", command)
         self.assertIn("--token-report", command)
         self.assertNotIn("--token-stats", command)
-        self.assertIn("--no-context", command)
+        self.assertEqual(command[command.index("--context-size") + 1], "80")
         self.assertIn("--temperature", command)
         self.assertIn("--top-p", command)
         self.assertIn("--top-k", command)

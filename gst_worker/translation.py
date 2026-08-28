@@ -44,6 +44,8 @@ def build_gst_command(
         model,
         "--batch-size",
         batch_size,
+        "--context-size",
+        str(_int_setting(settings, "gst_context_size", "GST_CONTEXT_SIZE", 50)),
     ]
     for option, key in (
         ("--temperature", "gst_temperature"),
@@ -74,7 +76,6 @@ def build_gst_command(
         ("--token-report", "gst_token_report", False),
         ("--no-streaming", "gst_no_streaming", False),
         ("--no-thinking", "gst_no_thinking", False),
-        ("--no-context", "gst_no_context", False),
     ):
         if bool(settings.get(key, default)):
             command.append(option)
