@@ -948,6 +948,46 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(process_job.call_count, 2)
             self.assertTrue((queue_dir / "done" / "overloaded.json").exists())
 
+    def test_processing_snapshot_includes_runtime_status_and_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp) / "queue"
+            worker.ensure_queue_dirs(str(queue_dir))
+            subtitle = Path(tmp) / "Movie.en.srt"
+            output = Path(tmp) / "Movie.zh.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            subtitle.with_suffix(".progress").write_text(json.dumps({"line": 42}), encoding="utf-8")
+            output.with_name("Movie.zh.partial.srt").write_text("partial", encoding="utf-8")
+            job = {
+                "job_id": "active",
+                "subtitle_path": str(subtitle),
+                "output_path": str(output),
+                "stage": "Sending subtitle batches to Gemini",
+                "started_at": 1000,
+            }
+            (queue_dir / "processing" / "active.json").write_text(json.dumps(job), encoding="utf-8")
+
+            snapshot = worker.queue_snapshot(str(queue_dir))
+
+            active = snapshot["processing"][0]
+            self.assertEqual(active["stage"], "Sending subtitle batches to Gemini")
+            self.assertEqual(active["progress_checkpoint"], 42)
+            self.assertEqual(active["partial_bytes"], 7)
+
+    def test_queue_worker_recovers_interrupted_processing_job_on_startup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp) / "queue"
+            worker.ensure_queue_dirs(str(queue_dir))
+            interrupted = {"job_id": "interrupted", "stage": "Sending subtitle batches to Gemini"}
+            (queue_dir / "processing" / "interrupted.json").write_text(json.dumps(interrupted), encoding="utf-8")
+
+            worker.QueueWorker(str(queue_dir), {"job_settle_seconds": 0}, worker.MemoryCache(), FakeHTTP({}))
+
+            recovered_path = queue_dir / "pending" / "interrupted.json"
+            self.assertTrue(recovered_path.exists())
+            self.assertFalse((queue_dir / "processing" / "interrupted.json").exists())
+            recovered = json.loads(recovered_path.read_text(encoding="utf-8"))
+            self.assertEqual(recovered["stage"], "Recovered after service restart")
+
     def test_queue_worker_daily_quota_pauses_other_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"

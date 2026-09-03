@@ -294,6 +294,16 @@ h1 {
   margin-bottom: 6px;
 }
 
+.job-progress {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel-2);
+  font-size: 13px;
+}
+
 .job-actions {
   display: flex;
   gap: 8px;

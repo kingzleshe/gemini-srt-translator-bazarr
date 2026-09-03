@@ -138,6 +138,26 @@ def queue_snapshot(queue_dir: str, limit: int = 100) -> dict[str, Any]:
                 job = {"job_id": path.stem}
             job["_state"] = state
             job["_path"] = str(path)
+            if state == "processing":
+                # gst writes resumable work next to the source subtitle.  This
+                # makes that live checkpoint available to the queue UI.
+                subtitle_path = Path(str(job.get("subtitle_path") or ""))
+                progress_path = subtitle_path.with_suffix(".progress")
+                output_path = Path(str(job.get("output_path") or ""))
+                partial_path = output_path.with_name(f"{output_path.stem}.partial.srt")
+                if progress_path.exists():
+                    try:
+                        progress = json.loads(progress_path.read_text(encoding="utf-8"))
+                        checkpoint = progress.get("line")
+                        if checkpoint is not None:
+                            job["progress_checkpoint"] = int(checkpoint)
+                    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                        pass
+                if partial_path.exists():
+                    try:
+                        job["partial_bytes"] = partial_path.stat().st_size
+                    except OSError:
+                        pass
             if state in {"deferred", "failed"}:
                 error_path = path.with_suffix(".error")
                 if error_path.exists():

@@ -12,7 +12,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from gst_worker.backups import (
     backup_file_path,
@@ -172,11 +172,19 @@ def seed_app_config_from_settings(
     return changed
 
 
-def process_job(job: dict[str, Any], settings: dict[str, Any], cache: MemoryCache, http: HTTPClient) -> str:
+def process_job(
+    job: dict[str, Any],
+    settings: dict[str, Any],
+    cache: MemoryCache,
+    http: HTTPClient,
+    status_callback: Callable[[str], None] | None = None,
+) -> str:
     if should_skip_job(job):
         logging.info("Skipping job for %s", job.get("subtitle_path"))
         return "skipped"
 
+    if status_callback:
+        status_callback("Resolving movie details")
     description = build_tmdb_description(
         job,
         bazarr=http,
@@ -186,7 +194,11 @@ def process_job(job: dict[str, Any], settings: dict[str, Any], cache: MemoryCach
         tmdb_api_key=settings["tmdb_api_key"],
         cache=cache,
     )
+    if status_callback:
+        status_callback("Sending subtitle batches to Gemini")
     status = run_translation(job, description, settings)
+    if status_callback:
+        status_callback("Refreshing Bazarr")
     refresh_bazarr(job, http=http, bazarr_url=settings["bazarr_url"], api_key=settings["bazarr_api_key"])
     return status
 
@@ -198,6 +210,24 @@ class QueueWorker:
         self.cache = cache
         self.http = http
         ensure_queue_dirs(str(self.queue_dir))
+        self.recover_interrupted_jobs()
+
+    def recover_interrupted_jobs(self) -> None:
+        """Return work interrupted by a service restart to the pending queue."""
+        for processing_path in sorted((self.queue_dir / "processing").glob("*.json")):
+            pending_path = self.queue_dir / "pending" / processing_path.name
+            if pending_path.exists():
+                logging.warning("Keeping interrupted job %s in processing; pending copy already exists", processing_path.name)
+                continue
+            try:
+                job = json.loads(processing_path.read_text(encoding="utf-8"))
+                job["stage"] = "Recovered after service restart"
+                job["updated_at"] = time.time()
+                processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                pass
+            processing_path.replace(pending_path)
+            logging.info("Recovered interrupted job %s to pending", processing_path.name)
 
     @property
     def provider_pause_path(self) -> Path:
@@ -266,7 +296,14 @@ class QueueWorker:
 
         try:
             job = json.loads(processing_path.read_text(encoding="utf-8"))
-            status = process_job(job, self.settings, self.cache, self.http)
+            def update_status(stage: str) -> None:
+                job["started_at"] = float(job.get("started_at") or time.time())
+                job["updated_at"] = time.time()
+                job["stage"] = stage
+                processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+
+            update_status("Starting translation")
+            status = process_job(job, self.settings, self.cache, self.http, update_status)
             for key in ("retry_at", "deferred_reason", "last_error", "provider_retry_count"):
                 job.pop(key, None)
             processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")

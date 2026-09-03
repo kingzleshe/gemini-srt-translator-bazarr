@@ -336,6 +336,13 @@ function formatDate(epochSeconds) {
   return new Date(epochSeconds * 1000).toLocaleString();
 }
 
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(total / 60);
+  const remaining = total % 60;
+  return minutes ? `${minutes}m ${remaining}s` : `${remaining}s`;
+}
+
 function renderBackups(items) {
   const el = document.getElementById("backup-list");
   if (!el) return;
@@ -418,6 +425,13 @@ async function loadQueue() {
       card.innerHTML = `
         <div class="job-title">${job.source_code || "?"} -> ${job.target_code || "?"}</div>
         <div class="muted">${job.subtitle_path || job.job_id}</div>
+        ${name === "processing" ? `
+          <div class="job-progress">
+            <strong>${job.stage || "Working"}</strong>
+            <div class="muted">Running for ${formatDuration(Date.now() / 1000 - (job.started_at || job.created_at || Date.now() / 1000))}</div>
+            ${job.progress_checkpoint ? `<div class="muted">Translator checkpoint: line ${job.progress_checkpoint}</div>` : `<div class="muted">Waiting for Gemini response…</div>`}
+            ${job.partial_bytes ? `<div class="muted">Partial output: ${formatBytes(job.partial_bytes)}</div>` : ""}
+          </div>` : ""}
         ${name === "deferred" && job.retry_at ? `<div class="muted">Retry after ${formatDate(job.retry_at)}</div>` : ""}
         ${job.error ? `<div class="status-warn">${job.error}</div>` : ""}
       `;
@@ -557,5 +571,11 @@ document.getElementById("add-target-language").addEventListener("click", () => a
 document.getElementById("load-wanted").addEventListener("click", loadWanted);
 document.getElementById("load-scan").addEventListener("click", loadScan);
 document.getElementById("enqueue-scan").addEventListener("click", enqueueScan);
+
+// Keep the active queue useful without repeatedly refreshing settings or
+// querying Bazarr while the user is watching a translation.
+setInterval(() => {
+  if (state.view === "queue") loadQueue().catch((error) => toast(error.message));
+}, 5000);
 
 switchView(viewFromHash());
