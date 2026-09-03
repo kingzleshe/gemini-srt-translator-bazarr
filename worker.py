@@ -275,10 +275,16 @@ class QueueWorker:
         for job_path in jobs:
             try:
                 job = json.loads(job_path.read_text(encoding="utf-8"))
-                created_at = float(job.get("created_at") or job_path.stat().st_mtime)
+                subtitle_path = Path(str(job.get("subtitle_path") or ""))
+                # The settle window protects an actively written subtitle, not
+                # the queue event.  A manually queued, already-stable subtitle
+                # should therefore start immediately.
+                settled_from = subtitle_path.stat().st_mtime if subtitle_path.exists() else float(
+                    job.get("created_at") or job_path.stat().st_mtime
+                )
             except Exception:
                 return job_path
-            if current_time - created_at >= settle_seconds:
+            if current_time - settled_from >= settle_seconds:
                 return job_path
         return None
 

@@ -886,6 +886,7 @@ class WorkerTests(unittest.TestCase):
             subtitle = root / "Movie.en.srt"
             output = root / "Movie.zh.srt"
             subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            os.utime(subtitle, (1_000, 1_000))
             job = {
                 "job_id": "settle-race",
                 "created_at": 1_000,
@@ -910,6 +911,36 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue(queue_worker.process_once(now=1_121))
             self.assertTrue((queue_dir / "done" / "settle-race.json").exists())
             self.assertEqual(output.read_text(encoding="utf-8"), "embedded zh subtitle")
+
+    def test_queue_worker_processes_old_subtitle_without_waiting_for_new_queue_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_dir = root / "queue"
+            worker.ensure_queue_dirs(str(queue_dir))
+            subtitle = root / "Movie.en.srt"
+            output = root / "Movie.zh.srt"
+            subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            os.utime(subtitle, (1_000, 1_000))
+            job = {
+                "job_id": "old-subtitle",
+                "created_at": 1_119,
+                "subtitle_path": str(subtitle),
+                "output_path": str(output),
+                "source_code": "en",
+                "target_code": "zh",
+                "provider": "embeddedsubtitles",
+            }
+            (queue_dir / "pending" / "old-subtitle.json").write_text(json.dumps(job), encoding="utf-8")
+            queue_worker = worker.QueueWorker(
+                str(queue_dir),
+                {"bazarr_url": "http://bazarr:6767", "bazarr_api_key": "", "tmdb_api_key": "", "job_settle_seconds": 120},
+                worker.MemoryCache(),
+                FakeHTTP({}),
+            )
+
+            output.write_text("embedded zh subtitle", encoding="utf-8")
+            self.assertTrue(queue_worker.process_once(now=1_120))
+            self.assertTrue((queue_dir / "done" / "old-subtitle.json").exists())
 
     def test_queue_worker_defers_503_and_retries_only_after_retry_at(self):
         with tempfile.TemporaryDirectory() as tmp:
