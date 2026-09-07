@@ -84,3 +84,9 @@ PATCH /api/movies?radarrid=<radarr_id>&action=scan-disk
 
 If an item ID is missing, it falls back to Bazarr's full subtitle scan task for
 series or movies.
+
+### Daily quota and cancellation
+
+Pending and deferred jobs have a Cancel button in the queue view. Cancellation removes the queued request without deleting subtitle files.
+
+When Gemini reports daily quota exhaustion, the worker fails the current job and all pending/deferred jobs with an explanatory error. During the existing 24-hour quota pause, API enqueue and retry requests are rejected and the Bazarr post-processing script skips new jobs. Once the pause expires, new submissions are accepted; failed jobs require resubmission or manual retry.

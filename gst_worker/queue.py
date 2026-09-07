@@ -13,6 +13,22 @@ from .subtitles import target_output_path
 QUEUE_STATES = ("pending", "processing", "deferred", "done", "failed")
 
 
+def daily_quota_pause_until(queue_dir: str, now: float | None = None) -> float | None:
+    try:
+        pause = json.loads((Path(queue_dir) / "provider-pause.json").read_text(encoding="utf-8"))
+        retry_at = float(pause.get("retry_at") or 0)
+        if pause.get("reason") == "daily-quota" and retry_at > (time.time() if now is None else now):
+            return retry_at
+    except (OSError, TypeError, ValueError):
+        pass
+    return None
+
+
+def reject_daily_quota(queue_dir: str) -> None:
+    if daily_quota_pause_until(queue_dir) is not None:
+        raise ValueError("Daily Gemini quota exhausted; new jobs and retries are disabled until the quota pause expires.")
+
+
 def should_skip_job(job: dict[str, Any]) -> bool:
     provider = str(job.get("provider", "")).lower()
     language = str(job.get("source_code") or job.get("language") or "").split(":", 1)[0].lower()
@@ -41,6 +57,7 @@ def job_id_for(subtitle_path: str, output_path: str, target_code: str) -> str:
 
 
 def retry_failed_job(queue_dir: str, job_id: str) -> bool:
+    reject_daily_quota(queue_dir)
     ensure_queue_dirs(queue_dir)
     failed = Path(queue_dir) / "failed" / f"{job_id}.json"
     pending = Path(queue_dir) / "pending" / f"{job_id}.json"
@@ -80,6 +97,7 @@ def enqueue_translation_jobs(
     base_job: dict[str, Any],
     targets: list[dict[str, Any]],
 ) -> list[str]:
+    reject_daily_quota(queue_dir)
     ensure_queue_dirs(queue_dir)
     created: list[str] = []
     subtitle_path = str(base_job.get("subtitle_path", ""))

@@ -56,6 +56,7 @@ from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache, cached_get_j
 from gst_worker.queue import (
     QUEUE_STATES,
     cancel_failed_job,
+    daily_quota_pause_until,
     enqueue_translation_jobs,
     ensure_queue_dirs,
     job_id_for,
@@ -247,6 +248,20 @@ class QueueWorker:
         self.provider_pause_path.unlink(missing_ok=True)
         return None
 
+    def fail_waiting_quota_jobs(self) -> None:
+        for state in ("pending", "deferred"):
+            for path in (self.queue_dir / state).glob("*.json"):
+                destination = self.queue_dir / "failed" / path.name
+                try:
+                    path.replace(destination)
+                except FileNotFoundError:
+                    continue
+                destination.with_suffix(".error").write_text(
+                    "Daily Gemini quota exhausted; automatic retry cancelled. Submit again after the quota pause expires.",
+                    encoding="utf-8",
+                )
+                path.with_suffix(".error").unlink(missing_ok=True)
+
     def promote_deferred_jobs(self, now: float) -> None:
         for deferred_path in sorted(
             (self.queue_dir / "deferred").glob("*.json"),
@@ -268,6 +283,8 @@ class QueueWorker:
     def ready_job_path(self, now: float | None = None) -> Path | None:
         current_time = time.time() if now is None else now
         if self.provider_pause_until(current_time) is not None:
+            if daily_quota_pause_until(str(self.queue_dir), current_time) is not None:
+                self.fail_waiting_quota_jobs()
             return None
         self.promote_deferred_jobs(current_time)
         settle_seconds = max(0, int(self.settings.get("job_settle_seconds") or 0))
@@ -318,11 +335,11 @@ class QueueWorker:
         except DailyQuotaExceededError as exc:
             failure_time = time.time()
             retry_at = failure_time + DAILY_QUOTA_PAUSE_SECONDS
-            job["retry_at"] = retry_at
-            job["deferred_reason"] = "daily-quota"
+            job.pop("retry_at", None)
+            job.pop("deferred_reason", None)
             job["last_error"] = str(exc)
             processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-            destination = self.queue_dir / "deferred" / processing_path.name
+            destination = self.queue_dir / "failed" / processing_path.name
             destination.with_suffix(".error").write_text(str(exc), encoding="utf-8")
             self.provider_pause_path.write_text(
                 json.dumps(
@@ -331,6 +348,7 @@ class QueueWorker:
                 ),
                 encoding="utf-8",
             )
+            self.fail_waiting_quota_jobs()
             logging.warning("Daily Gemini quota exhausted; queue paused until %s", int(retry_at))
         except ProviderUnavailableError as exc:
             retry_count = int(job.get("provider_retry_count") or 0) + 1

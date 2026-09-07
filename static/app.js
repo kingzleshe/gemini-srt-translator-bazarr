@@ -454,15 +454,15 @@ async function loadQueue() {
         };
         actions.append(retry, cancel);
         card.appendChild(actions);
-      } else if (name === "deferred") {
+      } else if (name === "pending" || name === "deferred") {
         const cancel = document.createElement("button");
         cancel.textContent = "Cancel";
         cancel.className = "danger";
         cancel.onclick = async () => {
-          if (!window.confirm("Cancel this deferred translation? It will not be retried.")) return;
+          if (!window.confirm(`Cancel this ${name} translation? It will not be retried.`)) return;
           await api("/api/queue/delete", {
             method: "POST",
-            body: JSON.stringify({ state: "deferred", job_id: job.job_id }),
+            body: JSON.stringify({ state: name, job_id: job.job_id }),
           });
           await refresh();
         };

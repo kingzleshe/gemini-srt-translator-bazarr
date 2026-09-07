@@ -74,7 +74,8 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn('id="metric-deferred"', html)
         self.assertIn('["pending", "processing", "deferred", "done", "failed"]', app_js)
         self.assertIn("Retry after", app_js)
-        self.assertIn('state: "deferred"', app_js)
+        self.assertIn('state: name', app_js)
+        self.assertIn('name === "pending" || name === "deferred"', app_js)
         self.assertNotIn('id="gst-resume-fallback-batch-size-input"', html)
 
     def test_backup_ui_supports_download_and_import(self):

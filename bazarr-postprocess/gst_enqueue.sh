@@ -34,6 +34,14 @@ import hashlib
 import time
 
 queue = pathlib.Path(os.environ["QUEUE_DIR"])
+try:
+    pause = json.loads((queue / "provider-pause.json").read_text(encoding="utf-8"))
+    if pause.get("reason") == "daily-quota" and float(pause.get("retry_at") or 0) > time.time():
+        print("skip: daily Gemini quota exhausted; queue admission paused")
+        raise SystemExit(0)
+except (OSError, TypeError, ValueError):
+    pass
+
 targets_file = pathlib.Path(os.environ["TARGETS_FILE"])
 subtitle_path = os.environ["SUBTITLE_PATH"]
 source_code = os.environ["LANGUAGE"].split(":", 1)[0].strip().lower()
@@ -95,7 +103,7 @@ for target in enabled(targets):
     job_id = hashlib.sha1(f"{subtitle_path}|{output_path}|{code}".encode("utf-8")).hexdigest()
     pending = queue / "pending" / f"{job_id}.json"
     processing = queue / "processing" / f"{job_id}.json"
-    if pending.exists() or processing.exists():
+    if pending.exists() or processing.exists() or (queue / "deferred" / pending.name).exists():
         continue
     tmp = pending.with_name(f".{job_id}.tmp")
     job = {

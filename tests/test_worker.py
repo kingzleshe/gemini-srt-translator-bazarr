@@ -1019,6 +1019,41 @@ class WorkerTests(unittest.TestCase):
             recovered = json.loads(recovered_path.read_text(encoding="utf-8"))
             self.assertEqual(recovered["stage"], "Recovered after service restart")
 
+    def test_daily_quota_blocks_enqueue_and_retry_until_expiry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_dir = Path(tmp) / "queue"
+            worker.ensure_queue_dirs(str(queue_dir))
+            source = Path(tmp) / "movie.en.srt"
+            source.write_text("subtitle", encoding="utf-8")
+            pause = queue_dir / "provider-pause.json"
+            pause.write_text(json.dumps({"reason": "daily-quota", "retry_at": 2000}), encoding="utf-8")
+            failed = queue_dir / "failed" / "retry.json"
+            failed.write_text('{"job_id":"retry"}', encoding="utf-8")
+            base = {"subtitle_path": str(source), "source_code": "en"}
+            targets = [{"code": "zh", "language": "Chinese", "enabled": True}]
+            with patch("gst_worker.queue.time.time", return_value=1000):
+                with self.assertRaisesRegex(ValueError, "Daily Gemini quota"):
+                    worker.enqueue_translation_jobs(str(queue_dir), base, targets)
+                with self.assertRaisesRegex(ValueError, "Daily Gemini quota"):
+                    worker.retry_failed_job(str(queue_dir), "retry")
+            self.assertTrue(failed.exists())
+            self.assertEqual(list((queue_dir / "pending").glob("*.json")), [])
+            with patch("gst_worker.queue.time.time", return_value=2001):
+                self.assertEqual(len(worker.enqueue_translation_jobs(str(queue_dir), base, targets)), 1)
+                self.assertTrue(worker.retry_failed_job(str(queue_dir), "retry"))
+
+    def test_cancel_pending_preserves_processing_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker.ensure_queue_dirs(tmp)
+            pending = Path(tmp) / "pending" / "cancel.json"
+            processing = Path(tmp) / "processing" / "active.json"
+            pending.write_text("{}", encoding="utf-8")
+            processing.write_text("{}", encoding="utf-8")
+            self.assertTrue(worker.delete_queue_job(tmp, "pending", "cancel"))
+            self.assertFalse(worker.delete_queue_job(tmp, "pending", "active"))
+            self.assertFalse(pending.exists())
+            self.assertTrue(processing.exists())
+
     def test_queue_worker_daily_quota_pauses_other_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
@@ -1050,8 +1085,9 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(process_job.call_count, 1)
             pause = json.loads((queue_dir / "provider-pause.json").read_text(encoding="utf-8"))
             self.assertEqual(pause["retry_at"], 87_400)
-            self.assertEqual(len(list((queue_dir / "deferred").glob("*.json"))), 1)
-            self.assertEqual(len(list((queue_dir / "pending").glob("*.json"))), 1)
+            self.assertEqual(len(list((queue_dir / "deferred").glob("*.json"))), 0)
+            self.assertEqual(len(list((queue_dir / "pending").glob("*.json"))), 0)
+            self.assertEqual(len(list((queue_dir / "failed").glob("*.json"))), 2)
 
     def test_queue_worker_fails_503_after_three_delayed_retries(self):
         with tempfile.TemporaryDirectory() as tmp:
