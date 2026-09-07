@@ -176,11 +176,16 @@ Deletes one job from a queue state.
 
 ## GET /api/logs
 
-Returns recent worker log lines.
+Returns up to 200 recent events from the current worker log. Each `entries`
+item has `timestamp`, `level`, `message`, and `details` (multiline tracebacks).
+The legacy `lines` array remains available. `truncated` indicates older content
+was omitted. Reads are limited to the last 512 KiB of the file; filters and
+export in the console apply only to this snapshot. New timestamps use UTC with
+an explicit `Z`; existing local-time log timestamps are preserved.
 
 ## POST /api/logs/clear
 
-Truncates the current worker log file.
+Truncates the current worker log file under the writer lock. Rotated history files are preserved.
 
 ## GET /api/backups
 

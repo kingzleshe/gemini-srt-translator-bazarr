@@ -530,18 +530,114 @@ async function enqueueScan() {
   await loadQueue();
 }
 
+const logState = { entries: [], visible: [], loading: null, snapshot: "", updated: "", truncated: false };
+
+function renderLogs() {
+  const level = document.getElementById("log-level").value;
+  const query = document.getElementById("log-search").value.trim().toLowerCase();
+  logState.visible = logState.entries.filter((entry) =>
+    (!level || entry.level === level) &&
+    `${entry.timestamp} ${entry.message} ${entry.details}`.toLowerCase().includes(query));
+  const output = document.getElementById("log-output");
+  const previousScroll = output.scrollTop;
+  const expanded = new Set(Array.from(output.querySelectorAll("details[open]"), (el) => el.dataset.key));
+  output.replaceChildren();
+  if (!logState.visible.length) {
+    const empty = document.createElement("p");
+    empty.className = "log-empty";
+    empty.textContent = logState.entries.length ? "No events match your filters." : "No logs yet. Worker activity will appear here.";
+    output.appendChild(empty);
+  }
+  for (const entry of logState.visible) {
+    const row = document.createElement("div");
+    row.className = `log-entry log-${entry.level.toLowerCase()}`;
+    const timestamp = document.createElement("span");
+    timestamp.className = "log-time";
+    timestamp.textContent = entry.timestamp || "—";
+    const badge = document.createElement("span");
+    badge.className = "log-level";
+    badge.textContent = entry.level;
+    const body = document.createElement("div");
+    body.className = "log-message";
+    const message = document.createElement("div");
+    message.textContent = entry.message;
+    body.appendChild(message);
+    if (entry.details) {
+      const details = document.createElement("details");
+      details.dataset.key = `${entry.timestamp} ${entry.message}`;
+      details.open = expanded.has(details.dataset.key);
+      const summary = document.createElement("summary");
+      summary.textContent = "Details";
+      const text = document.createElement("pre");
+      text.textContent = entry.details;
+      details.append(summary, text);
+      body.appendChild(details);
+    }
+    row.append(timestamp, badge, body);
+    output.appendChild(row);
+  }
+  output.scrollTop = document.getElementById("log-follow").checked ? output.scrollHeight : previousScroll;
+  updateLogStatus();
+}
+
+function updateLogStatus() {
+  const live = document.getElementById("log-live").checked;
+  document.getElementById("log-status").textContent =
+    `${live ? "Live · every 5s" : "Auto-refresh paused"} · ${logState.visible.length} / ${logState.entries.length} events` +
+    (logState.updated ? ` · Updated ${logState.updated}` : "") +
+    (logState.truncated ? " · Older events omitted" : "");
+}
+
 async function loadLogs() {
-  const data = await api("/api/logs");
-  document.getElementById("log-output").textContent = (data.lines || []).join("\n");
+  if (logState.loading) return logState.loading;
+  logState.loading = (async () => {
+    try {
+      const data = await api("/api/logs");
+      const entries = data.entries || (data.lines || []).map((message) => ({ timestamp: "", level: "INFO", message, details: "" }));
+      const snapshot = JSON.stringify(entries);
+      logState.updated = new Date().toLocaleTimeString();
+      logState.truncated = Boolean(data.truncated);
+      if (snapshot !== logState.snapshot) {
+        logState.entries = entries;
+        logState.snapshot = snapshot;
+        renderLogs();
+      } else {
+        updateLogStatus();
+      }
+    } catch (error) {
+      document.getElementById("log-status").textContent = `Refresh failed: ${error.message}. Previous events retained.`;
+    }
+  })();
+  try { await logState.loading; } finally { logState.loading = null; }
 }
 
 async function clearLogs() {
-  await api("/api/logs/clear", { method: "POST", body: "{}" });
-  document.getElementById("log-output").textContent = "";
-  toast("Logs cleared");
+  if (!window.confirm("Clear the current worker log? Rotated log files will be kept.")) return;
+  try {
+    await logState.loading;
+    await api("/api/logs/clear", { method: "POST", body: "{}" });
+    logState.snapshot = "";
+    await loadLogs();
+    toast("Current log cleared");
+  } catch (error) { toast(error.message); }
+}
+
+function downloadLogs() {
+  const text = logState.visible.map((entry) =>
+    `${entry.timestamp} ${entry.level} ${entry.message}${entry.details ? "\n" + entry.details.trimEnd() : ""}`).join("\n");
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `worker-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function refresh() {
+  if (state.view === "logs") {
+    await loadLogs();
+    return;
+  }
   try {
     await loadLanguages();
     await loadModels();
@@ -550,7 +646,6 @@ async function refresh() {
     if (state.view === "wanted") await loadWanted();
     if (state.view === "scan") await loadScan();
     if (state.view === "system") await loadBackups();
-    if (state.view === "logs") await loadLogs();
   } catch (error) {
     toast(error.message);
   }
@@ -562,6 +657,21 @@ document.getElementById("save-settings").addEventListener("click", saveSettings)
 document.getElementById("create-backup").addEventListener("click", createBackup);
 document.getElementById("import-backup").addEventListener("click", importBackup);
 document.getElementById("clear-logs").addEventListener("click", clearLogs);
+document.getElementById("refresh-logs").addEventListener("click", loadLogs);
+document.getElementById("download-logs").addEventListener("click", downloadLogs);
+document.getElementById("log-search").addEventListener("input", renderLogs);
+document.getElementById("log-level").addEventListener("change", renderLogs);
+document.getElementById("log-follow").addEventListener("change", renderLogs);
+document.getElementById("log-live").addEventListener("change", () => {
+  updateLogStatus();
+  if (document.getElementById("log-live").checked) loadLogs();
+});
+document.getElementById("log-output").addEventListener("scroll", (event) => {
+  const el = event.currentTarget;
+  if (el.scrollHeight - el.scrollTop - el.clientHeight > 40) {
+    document.getElementById("log-follow").checked = false;
+  }
+});
 document.getElementById("test-bazarr-key").addEventListener("click", () => testConnection("bazarr", "bazarr-key-status"));
 document.getElementById("test-gemini-key").addEventListener("click", () => testConnection("gemini_api_key", "gemini-key-status"));
 document.getElementById("test-gemini-key2").addEventListener("click", () => testConnection("gemini_api_key2", "gemini-key2-status"));
@@ -576,6 +686,7 @@ document.getElementById("enqueue-scan").addEventListener("click", enqueueScan);
 // querying Bazarr while the user is watching a translation.
 setInterval(() => {
   if (state.view === "queue") loadQueue().catch((error) => toast(error.message));
+  if (state.view === "logs" && document.getElementById("log-live").checked && !document.hidden) loadLogs();
 }, 5000);
 
 switchView(viewFromHash());

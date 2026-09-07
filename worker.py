@@ -10,6 +10,7 @@ import shutil
 import threading
 import time
 import urllib.parse
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
@@ -52,6 +53,7 @@ from gst_worker.config import (
 )
 from gst_worker.connection_tests import test_connection
 from gst_worker.gemini import gemini_models
+from gst_worker.logs import clear_logs, configure_logging, read_log_snapshot
 from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache, cached_get_json, first_data
 from gst_worker.queue import (
     QUEUE_STATES,
@@ -317,6 +319,7 @@ class QueueWorker:
         except FileNotFoundError:
             return False
 
+        started = time.monotonic()
         try:
             job = json.loads(processing_path.read_text(encoding="utf-8"))
             def update_status(stage: str) -> None:
@@ -325,13 +328,16 @@ class QueueWorker:
                 job["stage"] = stage
                 processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
 
+            logging.info("Job %s started | %s | %s -> %s", processing_path.stem,
+                         Path(str(job.get("subtitle_path", ""))).name,
+                         job.get("source_code", "?"), job.get("target_code", "?"))
             update_status("Starting translation")
             status = process_job(job, self.settings, self.cache, self.http, update_status)
             for key in ("retry_at", "deferred_reason", "last_error", "provider_retry_count"):
                 job.pop(key, None)
             processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
             destination = self.queue_dir / "done" / processing_path.name
-            logging.info("Job %s finished with status: %s", processing_path.name, status)
+            logging.info("Job %s finished | status=%s | duration=%.1fs", processing_path.stem, status, time.monotonic() - started)
         except DailyQuotaExceededError as exc:
             failure_time = time.time()
             retry_at = failure_time + DAILY_QUOTA_PAUSE_SECONDS
@@ -349,7 +355,8 @@ class QueueWorker:
                 encoding="utf-8",
             )
             self.fail_waiting_quota_jobs()
-            logging.warning("Daily Gemini quota exhausted; queue paused until %s", int(retry_at))
+            logging.warning("Job %s stopped: daily Gemini quota exhausted. New jobs blocked until %s; waiting jobs marked failed.",
+                            processing_path.stem, datetime.fromtimestamp(retry_at, timezone.utc).isoformat())
         except ProviderUnavailableError as exc:
             retry_count = int(job.get("provider_retry_count") or 0) + 1
             if retry_count <= len(PROVIDER_RETRY_DELAYS):
@@ -365,7 +372,7 @@ class QueueWorker:
                 logging.warning(
                     "Gemini unavailable; job %s deferred until %s (retry %s/%s)",
                     processing_path.name,
-                    int(retry_at),
+                    datetime.fromtimestamp(retry_at, timezone.utc).isoformat(),
                     retry_count,
                     len(PROVIDER_RETRY_DELAYS),
                 )
@@ -381,7 +388,7 @@ class QueueWorker:
             destination = self.queue_dir / "failed" / processing_path.name
             error_path = destination.with_suffix(".error")
             error_path.write_text(str(exc), encoding="utf-8")
-            logging.exception("Job %s failed", processing_path.name)
+            logging.exception("Job %s failed after %.1fs: %s", processing_path.stem, time.monotonic() - started, str(exc).splitlines()[0][:240] if str(exc) else type(exc).__name__)
 
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(processing_path), str(destination))
@@ -421,13 +428,6 @@ def delete_queue_job(queue_dir: str, state: str, job_id: str) -> bool:
     error = path.with_suffix(".error")
     if error.exists():
         error.unlink()
-    return True
-
-
-def clear_logs(log_dir: str) -> bool:
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    log_path = Path(log_dir) / "worker.log"
-    log_path.write_text("", encoding="utf-8")
     return True
 
 
@@ -520,7 +520,7 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                     }
                 )
             elif parsed.path == "/api/logs":
-                self.send_json({"lines": self.tail_log()})
+                self.send_json(read_log_snapshot(self.ctx["log_dir"]))
             elif parsed.path == "/api/gemini-models":
                 settings = load_settings(self.ctx["config_path"])
                 self.ctx["settings"] = settings
@@ -667,10 +667,7 @@ class ConsoleHandler(BaseHTTPRequestHandler):
         return status
 
     def tail_log(self, max_lines: int = 200) -> list[str]:
-        log_path = Path(self.ctx["log_dir"]) / "worker.log"
-        if not log_path.exists():
-            return []
-        return log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-max_lines:]
+        return read_log_snapshot(self.ctx["log_dir"], max_lines)["lines"]
 
     def serve_static(self, request_path: str) -> None:
         static_dir = Path(self.ctx["static_dir"])
@@ -703,15 +700,6 @@ def start_web_server(ctx: dict[str, Any], host: str, port: int) -> None:
     server.ctx = ctx  # type: ignore[attr-defined]
     logging.info("Gemini SRT Translator for Bazarr listening on http://%s:%s", host, port)
     server.serve_forever()
-
-
-def configure_logging(log_dir: str) -> None:
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    handlers: list[logging.Handler] = [
-        logging.StreamHandler(),
-        logging.FileHandler(Path(log_dir) / "worker.log", encoding="utf-8"),
-    ]
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=handlers)
 
 
 def main() -> int:

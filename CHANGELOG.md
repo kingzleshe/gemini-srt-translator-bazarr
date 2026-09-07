@@ -1,3 +1,11 @@
+# 2026-09-07
+- Added log level and text filters, live refresh, follow-latest, collapsible
+  error details, filtered download, and explicit current-log clearing.
+- Centralized logging in `gst_worker/logs.py` with UTC timestamps, bounded
+  reads, rotation, and backward-compatible log API responses.
+- Added subtitle and language context, elapsed time, and readable retry times
+  to worker job logs.
+
 # 2026-08-17
 - Classified Gemini daily quota and provider-unavailable failures instead of
   treating every `gst` exit 130 as a subtitle-content retry.

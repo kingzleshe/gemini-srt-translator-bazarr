@@ -31,6 +31,8 @@ Domain code is split under `gst_worker/`:
 - `tmdb.py`: TMDB lookup and translation description generation;
 - `bazarr.py`: Bazarr API refresh, wanted-item lookup, and API-key parsing;
 - `backups.py`: server-side backup listing and creation;
+- `logs.py`: logging setup, UTC formatting, 5 MiB rotation (three backups),
+  bounded event snapshots, and clearing the current log;
 - `http.py`: small HTTP client and JSON file cache helpers.
 
 The worker calls the `gst` CLI from `gemini-srt-translator`, writes the target

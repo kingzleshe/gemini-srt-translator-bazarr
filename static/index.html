@@ -251,10 +251,22 @@
     <section id="logs" class="view">
       <div class="panel">
         <div class="panel-head">
-          <h2>Logs</h2>
-          <button id="clear-logs" type="button">Clear</button>
+          <h2>Worker logs</h2>
+          <div class="log-actions">
+            <button id="refresh-logs" type="button">Refresh</button>
+            <button id="download-logs" type="button">Download filtered</button>
+            <button id="clear-logs" type="button" class="danger">Clear current log</button>
+          </div>
         </div>
-        <pre id="log-output"></pre>
+        <div class="log-toolbar">
+          <label>Level<select id="log-level"><option value="">All levels</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option><option>DEBUG</option></select></label>
+          <label class="log-search">Search<input id="log-search" type="search" placeholder="Message, job ID or subtitle…"></label>
+          <label class="check-field"><input id="log-live" type="checkbox" checked> Auto-refresh</label>
+          <label class="check-field"><input id="log-follow" type="checkbox" checked> Follow latest</label>
+        </div>
+        <div id="log-status" class="log-status" role="status">Loading logs…</div>
+        <div id="log-output" class="log-output" tabindex="0" aria-label="Worker log entries"></div>
+        <div class="log-footnote">Latest 200 events from the current log file. New timestamps use UTC (Z). Download respects filters.</div>
       </div>
     </section>
   </main>
