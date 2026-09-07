@@ -1,4 +1,9 @@
 # 2026-09-07
+- Centralized queue lifecycle transitions, recovery, retry metadata, quota
+  admission, and error-file cleanup in the queue module; the worker supplies
+  the translation execution callback.
+- Unified translator checkpoint and partial-output handling for execution and
+  queue progress snapshots. Added lifecycle and producer-protocol coverage.
 - Added log level and text filters, live refresh, follow-latest, collapsible
   error details, filtered download, and explicit current-log clearing.
 - Centralized logging in `gst_worker/logs.py` with UTC timestamps, bounded

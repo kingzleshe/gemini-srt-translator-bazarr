@@ -6,11 +6,9 @@ import mimetypes
 import json
 import logging
 import os
-import shutil
 import threading
 import time
 import urllib.parse
-from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
@@ -39,26 +37,17 @@ from gst_worker.gemini import gemini_models
 from gst_worker.logs import clear_logs, configure_logging, read_log_snapshot
 from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache
 from gst_worker.queue import (
-    QUEUE_STATES,
+    JobQueue,
     cancel_failed_job,
-    daily_quota_pause_until,
+    delete_queue_job,
     enqueue_translation_jobs,
-    ensure_queue_dirs,
     queue_snapshot,
     retry_failed_job,
     should_skip_job,
 )
 from gst_worker.subtitles import scan_source_subtitles
 from gst_worker.tmdb import build_tmdb_description
-from gst_worker.translation import (
-    DailyQuotaExceededError,
-    ProviderUnavailableError,
-    run_translation,
-)
-
-
-PROVIDER_RETRY_DELAYS = (120, 300, 900)
-DAILY_QUOTA_PAUSE_SECONDS = 86_400
+from gst_worker.translation import run_translation
 
 
 def load_settings(config_path: str | None = None) -> dict[str, Any]:
@@ -170,197 +159,25 @@ def process_job(
 
 
 class QueueWorker:
+    """Bind the queue's execution callback to the configured translation workflow."""
+
     def __init__(self, queue_dir: str, settings: dict[str, Any], cache: MemoryCache, http: HTTPClient) -> None:
-        self.queue_dir = Path(queue_dir)
+        self.queue = JobQueue(queue_dir)
         self.settings = settings
         self.cache = cache
         self.http = http
-        ensure_queue_dirs(str(self.queue_dir))
-        self.recover_interrupted_jobs()
-
-    def recover_interrupted_jobs(self) -> None:
-        """Return work interrupted by a service restart to the pending queue."""
-        for processing_path in sorted((self.queue_dir / "processing").glob("*.json")):
-            pending_path = self.queue_dir / "pending" / processing_path.name
-            if pending_path.exists():
-                logging.warning("Keeping interrupted job %s in processing; pending copy already exists", processing_path.name)
-                continue
-            try:
-                job = json.loads(processing_path.read_text(encoding="utf-8"))
-                job["stage"] = "Recovered after service restart"
-                job["updated_at"] = time.time()
-                processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-            except (OSError, TypeError, ValueError, json.JSONDecodeError):
-                pass
-            processing_path.replace(pending_path)
-            logging.info("Recovered interrupted job %s to pending", processing_path.name)
-
-    @property
-    def provider_pause_path(self) -> Path:
-        return self.queue_dir / "provider-pause.json"
-
-    def provider_pause_until(self, now: float) -> float | None:
-        if not self.provider_pause_path.exists():
-            return None
-        try:
-            pause = json.loads(self.provider_pause_path.read_text(encoding="utf-8"))
-            retry_at = float(pause.get("retry_at") or 0)
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            self.provider_pause_path.unlink(missing_ok=True)
-            return None
-        if retry_at > now:
-            return retry_at
-        self.provider_pause_path.unlink(missing_ok=True)
-        return None
-
-    def fail_waiting_quota_jobs(self) -> None:
-        for state in ("pending", "deferred"):
-            for path in (self.queue_dir / state).glob("*.json"):
-                destination = self.queue_dir / "failed" / path.name
-                try:
-                    path.replace(destination)
-                except FileNotFoundError:
-                    continue
-                destination.with_suffix(".error").write_text(
-                    "Daily Gemini quota exhausted; automatic retry cancelled. Submit again after the quota pause expires.",
-                    encoding="utf-8",
-                )
-                path.with_suffix(".error").unlink(missing_ok=True)
-
-    def promote_deferred_jobs(self, now: float) -> None:
-        for deferred_path in sorted(
-            (self.queue_dir / "deferred").glob("*.json"),
-            key=lambda path: path.stat().st_mtime,
-        ):
-            try:
-                job = json.loads(deferred_path.read_text(encoding="utf-8"))
-                retry_at = float(job.get("retry_at") or 0)
-            except Exception:
-                retry_at = 0
-            if retry_at > now:
-                continue
-            pending_path = self.queue_dir / "pending" / deferred_path.name
-            if pending_path.exists():
-                continue
-            deferred_path.replace(pending_path)
-            deferred_path.with_suffix(".error").unlink(missing_ok=True)
-
-    def ready_job_path(self, now: float | None = None) -> Path | None:
-        current_time = time.time() if now is None else now
-        if self.provider_pause_until(current_time) is not None:
-            if daily_quota_pause_until(str(self.queue_dir), current_time) is not None:
-                self.fail_waiting_quota_jobs()
-            return None
-        self.promote_deferred_jobs(current_time)
-        settle_seconds = max(0, int(self.settings.get("job_settle_seconds") or 0))
-        jobs = sorted((self.queue_dir / "pending").glob("*.json"), key=lambda path: path.stat().st_mtime)
-        for job_path in jobs:
-            try:
-                job = json.loads(job_path.read_text(encoding="utf-8"))
-                subtitle_path = Path(str(job.get("subtitle_path") or ""))
-                # The settle window protects an actively written subtitle, not
-                # the queue event.  A manually queued, already-stable subtitle
-                # should therefore start immediately.
-                settled_from = subtitle_path.stat().st_mtime if subtitle_path.exists() else float(
-                    job.get("created_at") or job_path.stat().st_mtime
-                )
-            except Exception:
-                return job_path
-            if current_time - settled_from >= settle_seconds:
-                return job_path
-        return None
+        self.queue.recover_interrupted_jobs()
 
     def process_once(self, now: float | None = None) -> bool:
-        current_time = time.time() if now is None else now
-        job_path = self.ready_job_path(now=current_time)
-        if job_path is None:
-            return False
-
-        processing_path = self.queue_dir / "processing" / job_path.name
-        try:
-            job_path.replace(processing_path)
-        except FileNotFoundError:
-            return False
-
-        started = time.monotonic()
-        try:
-            job = json.loads(processing_path.read_text(encoding="utf-8"))
-            def update_status(stage: str) -> None:
-                job["started_at"] = float(job.get("started_at") or time.time())
-                job["updated_at"] = time.time()
-                job["stage"] = stage
-                processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-
-            logging.info("Job %s started | %s | %s -> %s", processing_path.stem,
-                         Path(str(job.get("subtitle_path", ""))).name,
-                         job.get("source_code", "?"), job.get("target_code", "?"))
-            update_status("Starting translation")
-            status = process_job(job, self.settings, self.cache, self.http, update_status)
-            for key in ("retry_at", "deferred_reason", "last_error", "provider_retry_count"):
-                job.pop(key, None)
-            processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-            destination = self.queue_dir / "done" / processing_path.name
-            logging.info("Job %s finished | status=%s | duration=%.1fs", processing_path.stem, status, time.monotonic() - started)
-        except DailyQuotaExceededError as exc:
-            failure_time = time.time()
-            retry_at = failure_time + DAILY_QUOTA_PAUSE_SECONDS
-            job.pop("retry_at", None)
-            job.pop("deferred_reason", None)
-            job["last_error"] = str(exc)
-            processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-            destination = self.queue_dir / "failed" / processing_path.name
-            destination.with_suffix(".error").write_text(str(exc), encoding="utf-8")
-            self.provider_pause_path.write_text(
-                json.dumps(
-                    {"retry_at": retry_at, "reason": "daily-quota", "error": str(exc)},
-                    ensure_ascii=False,
-                ),
-                encoding="utf-8",
-            )
-            self.fail_waiting_quota_jobs()
-            logging.warning("Job %s stopped: daily Gemini quota exhausted. New jobs blocked until %s; waiting jobs marked failed.",
-                            processing_path.stem, datetime.fromtimestamp(retry_at, timezone.utc).isoformat())
-        except ProviderUnavailableError as exc:
-            retry_count = int(job.get("provider_retry_count") or 0) + 1
-            if retry_count <= len(PROVIDER_RETRY_DELAYS):
-                failure_time = time.time()
-                retry_at = failure_time + PROVIDER_RETRY_DELAYS[retry_count - 1]
-                job["provider_retry_count"] = retry_count
-                job["retry_at"] = retry_at
-                job["deferred_reason"] = "provider-unavailable"
-                job["last_error"] = str(exc)
-                processing_path.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-                destination = self.queue_dir / "deferred" / processing_path.name
-                destination.with_suffix(".error").write_text(str(exc), encoding="utf-8")
-                logging.warning(
-                    "Gemini unavailable; job %s deferred until %s (retry %s/%s)",
-                    processing_path.name,
-                    datetime.fromtimestamp(retry_at, timezone.utc).isoformat(),
-                    retry_count,
-                    len(PROVIDER_RETRY_DELAYS),
-                )
-            else:
-                destination = self.queue_dir / "failed" / processing_path.name
-                destination.with_suffix(".error").write_text(str(exc), encoding="utf-8")
-                logging.error(
-                    "Gemini remained unavailable after %s delayed retries; job %s failed",
-                    len(PROVIDER_RETRY_DELAYS),
-                    processing_path.name,
-                )
-        except Exception as exc:
-            destination = self.queue_dir / "failed" / processing_path.name
-            error_path = destination.with_suffix(".error")
-            error_path.write_text(str(exc), encoding="utf-8")
-            logging.exception("Job %s failed after %.1fs: %s", processing_path.stem, time.monotonic() - started, str(exc).splitlines()[0][:240] if str(exc) else type(exc).__name__)
-
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(processing_path), str(destination))
-        return True
+        return self.queue.process_once(
+            lambda job, update_status: process_job(job, self.settings, self.cache, self.http, update_status),
+            settle_seconds=max(0, int(self.settings.get("job_settle_seconds") or 0)),
+            now=now,
+        )
 
     def run_forever(self, sleep_seconds: int) -> None:
         while True:
-            did_work = self.process_once()
-            if not did_work:
+            if not self.process_once():
                 time.sleep(sleep_seconds)
 
 
@@ -379,19 +196,6 @@ def read_binary_body(handler: BaseHTTPRequestHandler) -> bytes:
     if length <= 0:
         raise ValueError("request body is empty")
     return handler.rfile.read(length)
-
-
-def delete_queue_job(queue_dir: str, state: str, job_id: str) -> bool:
-    if state not in QUEUE_STATES:
-        return False
-    path = Path(queue_dir) / state / f"{job_id}.json"
-    if not path.exists():
-        return False
-    path.unlink()
-    error = path.with_suffix(".error")
-    if error.exists():
-        error.unlink()
-    return True
 
 
 def backup_maintenance_once(state_dir: str, config_path: str, postprocess_targets_path: str) -> dict[str, Any] | None:

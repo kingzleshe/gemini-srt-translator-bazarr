@@ -26,8 +26,11 @@ Domain code is split under `gst_worker/`:
 - `config.py`: app settings, language normalization, and Bazarr language list
   loading;
 - `subtitles.py`: subtitle path mapping and local source subtitle scanning;
-- `queue.py`: queue file naming, creation, skip checks, and snapshots;
-- `translation.py`: `gst` command construction and subprocess environment;
+- `queue.py`: queue admission, lifecycle, skip checks, and snapshots. `JobQueue`
+  owns recovery, settling, claiming, deferred retries, quota pauses, and status
+  persistence. Console retry and delete operations share its transition helpers;
+- `translation.py`: translation execution and the `gst` work-file protocol,
+  including checkpoint interpretation, partial-output cleanup, and publication;
 - `tmdb.py`: TMDB lookup and translation description generation;
 - `bazarr.py`: Bazarr API refresh, wanted-item lookup, and API-key parsing;
 - `backups.py`: server-side backup listing and creation;
@@ -37,6 +40,21 @@ Domain code is split under `gst_worker/`:
 
 The worker calls the `gst` CLI from `gemini-srt-translator`, writes the target
 subtitle, and asks Bazarr to scan the affected series or movie.
+
+`QueueWorker` binds `JobQueue.process_once` to the configured translation
+workflow through an execution callback. Queue lifecycle tests use the same
+interface with a callback and a real temporary directory, without HTTP or TMDB
+setup. Recovery is explicit at worker startup, so creating a queue handle does
+not recover work that is still running.
+
+Queue snapshots obtain translation progress through `translation_progress`;
+they do not interpret translator filenames or checkpoint fields. Execution and
+observation share the translation module's work-file implementation. A visible
+checkpoint does not by itself imply resumability: partial output must also exist.
+
+Bazarr remains a separate, dependency-free file producer. Its embedded Python
+payload is tested against the worker's admission and retry protocol; it does not
+need network access to enqueue work.
 
 ### Web Console
 
@@ -88,8 +106,9 @@ breaker prevents other work from consuming requests after daily quota exhaustion
 4. The worker executes `gst translate`.
 5. A Gemini `503` moves the job to `deferred` for 2, 5, then 15 minutes. After
    three delayed retries it moves to `failed`.
-6. A daily quota `429` moves the job to `deferred` and pauses the queue for 24
-   hours. Content line-count errors alone retry with the smaller batch size.
+6. A daily quota `429` moves the job and waiting jobs to `failed`, cancels
+   automatic retries, and blocks admission and manual retries for 24 hours.
+   Content line-count errors alone retry with the smaller batch size.
 7. On success, the job moves to `done`.
 8. The worker refreshes Bazarr with `scan-disk`; if item IDs are missing, it
    falls back to full subtitle scan tasks.

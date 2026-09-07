@@ -1062,8 +1062,8 @@ class WorkerTests(unittest.TestCase):
             processing = Path(tmp) / "processing" / "active.json"
             pending.write_text("{}", encoding="utf-8")
             processing.write_text("{}", encoding="utf-8")
-            self.assertTrue(worker.delete_queue_job(tmp, "pending", "cancel"))
-            self.assertFalse(worker.delete_queue_job(tmp, "pending", "active"))
+            self.assertTrue(gst_queue.delete_queue_job(tmp, "pending", "cancel"))
+            self.assertFalse(gst_queue.delete_queue_job(tmp, "pending", "active"))
             self.assertFalse(pending.exists())
             self.assertTrue(processing.exists())
 

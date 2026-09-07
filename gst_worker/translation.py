@@ -158,27 +158,72 @@ def _int_setting(settings: dict[str, Any], key: str, env_key: str, default: int)
         return default
 
 
-def _progress_line(progress_path: Path) -> int | None:
-    if not progress_path.exists():
-        return None
-    try:
-        data = json.loads(progress_path.read_text(encoding="utf-8"))
-        line = data.get("line")
-        return int(line) if line is not None else None
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
-        return None
+class _TranslationFiles:
+    """The gst work-file protocol, shared by execution and progress reporting."""
 
+    def __init__(self, job: dict[str, Any]) -> None:
+        self.source = Path(str(job["subtitle_path"]))
+        self.output = Path(str(job.get("output_path") or target_output_path(
+            str(self.source), str(job.get("target_code") or "zh"),
+        )))
+        self.partial = self.output.with_name(f"{self.output.stem}.partial.srt")
+        self.progress = self.source.with_suffix(".progress")
 
-def _remove_untrusted_retry_state(temp_output: Path, progress_path: Path) -> None:
-    line = _progress_line(progress_path)
-    if line is not None and line > 1:
-        return
-    for path in (temp_output, progress_path):
+    def checkpoint(self) -> int | None:
         try:
-            if path.exists():
-                path.unlink()
-        except OSError as exc:
-            logging.warning("Failed to remove stale gst retry state %s: %s", path, exc)
+            data = json.loads(self.progress.read_text(encoding="utf-8"))
+            line = data.get("line") if isinstance(data, dict) else None
+            return int(line) if line is not None else None
+        except (OSError, TypeError, ValueError, OverflowError):
+            return None
+
+    def snapshot(self) -> dict[str, int]:
+        result = {}
+        line = self.checkpoint()
+        if line is not None:
+            result["progress_checkpoint"] = line
+        try:
+            result["partial_bytes"] = self.partial.stat().st_size
+        except OSError:
+            pass
+        return result
+
+    def prepare(self) -> bool:
+        """Preserve resumable output; report whether its checkpoint is trusted."""
+        can_resume = self.partial.exists() and self.partial.stat().st_size > 0 and self.progress.exists()
+        if self.partial.exists() and not can_resume:
+            self.partial.unlink()
+        line = self.checkpoint() if can_resume else None
+        return line is not None and line > 1
+
+    def discard_untrusted_retry(self) -> None:
+        line = self.checkpoint()
+        if line is not None and line > 1:
+            return
+        for path in (self.partial, self.progress):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as exc:
+                logging.warning("Failed to remove stale gst retry state %s: %s", path, exc)
+
+    def publish(self) -> str:
+        if not self.partial.exists() or self.partial.stat().st_size == 0:
+            raise RuntimeError(f"gst did not create a non-empty output file: {self.partial}")
+        if self.output.exists():
+            self.partial.unlink()
+            return "skipped-existing-output"
+        self.partial.replace(self.output)
+        return "translated"
+
+
+def translation_progress(job: dict[str, Any]) -> dict[str, int]:
+    """Read observable translation progress without exposing gst file conventions."""
+    if not job.get("subtitle_path"):
+        return {}
+    try:
+        return _TranslationFiles(job).snapshot()
+    except (OSError, TypeError, ValueError):
+        return {}
 
 
 def translation_environment(settings: dict[str, Any], base_env: dict[str, str] | None = None) -> dict[str, str]:
@@ -194,24 +239,17 @@ def translation_environment(settings: dict[str, Any], base_env: dict[str, str] |
 
 
 def run_translation(job: dict[str, Any], description: str, settings: dict[str, Any]) -> str:
-    input_srt = str(job["subtitle_path"])
-    output_srt = str(job.get("output_path") or target_output_path(input_srt, str(job.get("target_code") or "zh")))
-    output_path = Path(output_srt)
-    if output_path.exists():
+    files = _TranslationFiles(job)
+    input_srt = str(files.source)
+    output_srt = str(files.output)
+    if files.output.exists():
         return "skipped-existing-output"
-
-    temp_output = output_path.with_name(f"{output_path.stem}.partial.srt")
-    progress_path = Path(input_srt).with_suffix(".progress")
-    can_resume = temp_output.exists() and temp_output.stat().st_size > 0 and progress_path.exists()
-    if temp_output.exists() and not can_resume:
-        temp_output.unlink()
+    can_resume_from_progress = files.prepare()
 
     primary_batch_size = _int_setting(settings, "gst_batch_size", "GST_BATCH_SIZE", 500)
     retry_batch_size = _int_setting(settings, "gst_retry_batch_size", "GST_RETRY_BATCH_SIZE", 300)
     command_settings = settings
     command_batch_size = primary_batch_size
-    resume_progress_line = _progress_line(progress_path) if can_resume else None
-    can_resume_from_progress = resume_progress_line is not None and resume_progress_line > 1
     if can_resume_from_progress and retry_batch_size > 0 and retry_batch_size < primary_batch_size:
         logging.info("Resuming gst partial output with fallback batch size %s", retry_batch_size)
         command_settings = dict(settings)
@@ -223,7 +261,7 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
     while True:
         command = build_gst_command(
             input_srt,
-            str(temp_output),
+            str(files.partial),
             description,
             target_language=str(job.get("target_language") or os.getenv("GST_TARGET_LANGUAGE", "Simplified Chinese")),
             gst_settings=command_settings,
@@ -255,7 +293,7 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
                 retry_batch_size,
                 _result_output_tail(result),
             )
-            _remove_untrusted_retry_state(temp_output, progress_path)
+            files.discard_untrusted_retry()
             command_settings = dict(settings)
             command_settings["gst_batch_size"] = retry_batch_size
             command_batch_size = retry_batch_size
@@ -263,12 +301,4 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
         break
     if result.returncode != 0:
         raise RuntimeError(_format_gst_failure(result))
-    if not temp_output.exists() or temp_output.stat().st_size == 0:
-        raise RuntimeError(f"gst did not create a non-empty output file: {temp_output}")
-
-    if output_path.exists():
-        temp_output.unlink()
-        return "skipped-existing-output"
-
-    temp_output.replace(output_path)
-    return "translated"
+    return files.publish()
