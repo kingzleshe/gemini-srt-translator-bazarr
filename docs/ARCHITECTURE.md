@@ -29,6 +29,12 @@ Domain code is split under `gst_worker/`:
 - `queue.py`: queue admission, lifecycle, skip checks, and snapshots. `JobQueue`
   owns recovery, settling, claiming, deferred retries, quota pauses, and status
   persistence. Console retry and delete operations share its transition helpers;
+- `queue_policy.py`: pure retry and daily quota lifecycle decisions. This is the
+  policy seam; filesystem moves remain in `queue.py`.
+- `console.py`: `ConsoleActions`, the small interface used by the HTTP adapter
+  for queue actions. It keeps request routing separate from queue orchestration;
+- `translation_attempt.py`: `TranslationAttempt`, the observation and execution
+  seam for unfinished translation work, checkpoints, and publication;
 - `translation.py`: translation execution and the `gst` work-file protocol,
   including checkpoint interpretation, partial-output cleanup, and publication;
 - `tmdb.py`: TMDB lookup and translation description generation;
@@ -42,15 +48,21 @@ The worker calls the `gst` CLI from `gemini-srt-translator`, writes the target
 subtitle, and asks Bazarr to scan the affected series or movie.
 
 `QueueWorker` binds `JobQueue.process_once` to the configured translation
-workflow through an execution callback. Queue lifecycle tests use the same
+workflow through an execution callback and exposes `ConsoleActions` to the HTTP
+adapter. Queue lifecycle tests use the same
 interface with a callback and a real temporary directory, without HTTP or TMDB
 setup. Recovery is explicit at worker startup, so creating a queue handle does
 not recover work that is still running.
 
-Queue snapshots obtain translation progress through `translation_progress`;
+Queue snapshots obtain translation progress through the `TranslationAttempt`
+interface;
 they do not interpret translator filenames or checkpoint fields. Execution and
 observation share the translation module's work-file implementation. A visible
 checkpoint does not by itself imply resumability: partial output must also exist.
+
+The direct seam tests in `tests/test_architecture_modules.py` verify policy,
+console actions, and translation-attempt delegation independently of the HTTP
+server and the complete queue lifecycle tests.
 
 Bazarr remains a separate, dependency-free file producer. Its embedded Python
 payload is tested against the worker's admission and retry protocol; it does not
