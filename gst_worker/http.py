@@ -86,3 +86,13 @@ def first_data(response: Any) -> dict[str, Any]:
     if isinstance(data, list) and data:
         return data[0]
     return {}
+
+
+class HTTPTransport:
+    """Small transport interface consumed by integration adapters."""
+    def __init__(self, client: HTTPClient) -> None:
+        self.client = client
+    def get_json(self, url: str, **kwargs: Any) -> Any:
+        return self.client.get_json(url, **kwargs)
+    def request_json(self, method: str, url: str, **kwargs: Any) -> Any:
+        return self.client.request_json(method, url, **kwargs)

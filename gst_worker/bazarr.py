@@ -159,3 +159,13 @@ def list_wanted_items(
             }
         )
     return items
+
+
+class BazarrIntegration:
+    """Narrow interface for wanted discovery and subtitle refresh."""
+    def __init__(self, http: HTTPClient, bazarr_url: str, api_key: str) -> None:
+        self.http, self.bazarr_url, self.api_key = http, bazarr_url.rstrip("/"), api_key
+    def wanted(self, source_languages: list[dict[str, Any]], targets: list[dict[str, Any]], limit: int = 100) -> list[dict[str, Any]]:
+        return list_wanted_items(self.http, self.bazarr_url, self.api_key, source_languages, targets, limit)
+    def refresh(self, job: dict[str, Any]) -> None:
+        refresh_bazarr(job, self.http, self.bazarr_url, self.api_key)

@@ -174,3 +174,13 @@ def create_scheduled_backup_if_due(
     if newest is not None and current_time - newest < interval_days * SECONDS_PER_DAY:
         return None
     return create_backup(state_dir, config_path, postprocess_targets_path, reason="scheduled", now=current_time)
+
+
+class BackupMaintenance:
+    """Narrow interface for backup retention and scheduled creation."""
+    def __init__(self, state_dir: str, config_path: str, postprocess_targets_path: str) -> None:
+        self.state_dir, self.config_path, self.postprocess_targets_path = state_dir, config_path, postprocess_targets_path
+    def run_if_due(self) -> dict[str, Any] | None:
+        return create_scheduled_backup_if_due(self.state_dir, self.config_path, self.postprocess_targets_path)
+    def create(self, reason: str = "manual") -> dict[str, Any]:
+        return create_backup(self.state_dir, self.config_path, self.postprocess_targets_path, reason=reason)
