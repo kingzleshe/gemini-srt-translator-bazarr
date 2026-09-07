@@ -2,7 +2,9 @@
 from dataclasses import dataclass
 from typing import Any
 from .console import ConsoleActions
-from .http import HTTPClient
+from .http import HTTPClient, HTTPTransport
+from .bazarr import BazarrIntegration
+from .backups import BackupMaintenance
 
 @dataclass
 class RuntimeContext:
@@ -16,6 +18,9 @@ class RuntimeContext:
     postprocess_targets_path: str
     static_dir: str
     log_dir: str
+    bazarr: BazarrIntegration
+    backups: BackupMaintenance
+    transport: HTTPTransport
 
     def as_handler_context(self) -> dict[str, Any]:
         return self.__dict__.copy()

@@ -21,7 +21,7 @@ from gst_worker.backups import (
     purge_old_backups,
     restore_backup_archive,
 )
-from gst_worker.bazarr import list_wanted_items, read_bazarr_api_key, refresh_bazarr
+from gst_worker.bazarr import BazarrIntegration, list_wanted_items, read_bazarr_api_key, refresh_bazarr
 from gst_worker.config import (
     SECRET_MASK,
     SECRET_CONFIG_KEYS,
@@ -35,7 +35,7 @@ from gst_worker.config import (
 from gst_worker.connection_tests import test_connection
 from gst_worker.gemini import gemini_models
 from gst_worker.logs import clear_logs, configure_logging, read_log_snapshot
-from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache
+from gst_worker.http import HTTPClient, HTTPTransport, JsonFileCache, MemoryCache
 from gst_worker.queue import (
     JobQueue,
     queue_snapshot,
@@ -487,6 +487,8 @@ def main() -> int:
     cache = JsonFileCache(os.getenv("TMDB_CACHE_PATH", f"{state_dir}/cache/tmdb_cache.json"))
     http = HTTPClient(timeout=int(os.getenv("HTTP_TIMEOUT_SECONDS", "20")))
     worker = QueueWorker(queue_dir=queue_dir, settings=settings, cache=cache, http=http)
+    bazarr = BazarrIntegration(http, settings["bazarr_url"], settings["bazarr_api_key"])
+    backups = BackupMaintenance(state_dir, config_path, postprocess_targets_path)
 
     if args.once:
         worker.process_once()
@@ -513,6 +515,9 @@ def main() -> int:
         postprocess_targets_path=postprocess_targets_path,
         static_dir=static_dir,
         log_dir=log_dir,
+        bazarr=bazarr,
+        backups=backups,
+        transport=HTTPTransport(http),
     ).as_handler_context()
     if not args.no_worker:
         threading.Thread(target=worker.run_forever, args=(args.sleep,), daemon=True).start()
