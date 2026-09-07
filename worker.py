@@ -45,6 +45,8 @@ from gst_worker.queue import (
     retry_failed_job,
     should_skip_job,
 )
+from gst_worker.console import ConsoleActions
+from gst_worker.translation_attempt import DEFAULT_ATTEMPT
 from gst_worker.subtitles import scan_source_subtitles
 from gst_worker.tmdb import build_tmdb_description
 from gst_worker.translation import run_translation
@@ -151,7 +153,7 @@ def process_job(
     )
     if status_callback:
         status_callback("Sending subtitle batches to Gemini")
-    status = run_translation(job, description, settings)
+    status = DEFAULT_ATTEMPT.run(job, description, settings)
     if status_callback:
         status_callback("Refreshing Bazarr")
     refresh_bazarr(job, http=http, bazarr_url=settings["bazarr_url"], api_key=settings["bazarr_api_key"])
@@ -166,6 +168,7 @@ class QueueWorker:
         self.settings = settings
         self.cache = cache
         self.http = http
+        self.console = ConsoleActions(queue_dir)
         self.queue.recover_interrupted_jobs()
 
     def process_once(self, now: float | None = None) -> bool:
@@ -338,8 +341,7 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                 if isinstance(target_codes, list) and target_codes:
                     wanted = {str(code) for code in target_codes}
                     targets = [target for target in targets if str(target["code"]) in wanted]
-                created = enqueue_translation_jobs(
-                    self.ctx["queue_dir"],
+                created = self.ctx["console"].enqueue(
                     {
                         "video_path": body.get("video_path", ""),
                         "subtitle_path": body.get("subtitle_path", ""),
@@ -364,8 +366,7 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                 created: list[str] = []
                 for item in items:
                     created.extend(
-                        enqueue_translation_jobs(
-                            self.ctx["queue_dir"],
+                        self.ctx["console"].enqueue(
                             {
                                 "video_path": item["video_path"],
                                 "subtitle_path": item["subtitle_path"],
@@ -379,17 +380,13 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                     )
                 self.send_json({"created": created, "count": len(created)})
             elif parsed.path == "/api/queue/retry":
-                self.send_json({"ok": retry_failed_job(self.ctx["queue_dir"], str(body.get("job_id", "")))})
+                self.send_json({"ok": self.ctx["console"].retry(str(body.get("job_id", "")))})
             elif parsed.path == "/api/queue/cancel":
-                self.send_json({"ok": cancel_failed_job(self.ctx["queue_dir"], str(body.get("job_id", "")))})
+                self.send_json({"ok": self.ctx["console"].cancel(str(body.get("job_id", "")))})
             elif parsed.path == "/api/queue/delete":
                 self.send_json(
                     {
-                        "ok": delete_queue_job(
-                            self.ctx["queue_dir"],
-                            str(body.get("state", "")),
-                            str(body.get("job_id", "")),
-                        )
+                        "ok": self.ctx["console"].delete(str(body.get("state", "")), str(body.get("job_id", "")))
                     }
                 )
             elif parsed.path == "/api/backups":
@@ -511,6 +508,7 @@ def main() -> int:
 
     ctx = {
         "queue_dir": queue_dir,
+        "console": worker.console,
         "settings": settings,
         "worker": worker,
         "http": http,

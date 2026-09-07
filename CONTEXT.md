@@ -23,3 +23,11 @@ not establish that unfinished subtitle output is available for resuming.
 **Daily quota pause**:
 The period after daily Gemini quota exhaustion during which new translation jobs
 and retries are blocked; waiting jobs are failed rather than automatically resumed.
+
+**Queue lifecycle**:
+The rules that move a translation job through the job queue, including settling,
+recovery, retries, quota pauses, and terminal outcomes.
+
+**Translation attempt**:
+One execution of translation work, including its unfinished work files,
+checkpoint, partial output, and publication of a completed target subtitle.

@@ -10,11 +10,10 @@ from typing import Any, Callable
 
 from .config import enabled_target_languages
 from .subtitles import target_output_path
-from .translation import DailyQuotaExceededError, ProviderUnavailableError, translation_progress
+from .translation import DailyQuotaExceededError, ProviderUnavailableError
+from .translation_attempt import DEFAULT_ATTEMPT
+from .queue_policy import PROVIDER_RETRY_DELAYS, daily_quota_retry_at, provider_retry_decision
 
-
-PROVIDER_RETRY_DELAYS = (120, 300, 900)
-DAILY_QUOTA_PAUSE_SECONDS = 86_400
 
 QUEUE_STATES = ("pending", "processing", "deferred", "done", "failed")
 
@@ -181,7 +180,7 @@ def queue_snapshot(queue_dir: str, limit: int = 100) -> dict[str, Any]:
             job["_state"] = state
             job["_path"] = str(path)
             if state == "processing":
-                job.update(translation_progress(job))
+                job.update(DEFAULT_ATTEMPT.progress(job))
             if state in {"deferred", "failed"}:
                 error_path = path.with_suffix(".error")
                 if error_path.exists():
@@ -309,7 +308,7 @@ class JobQueue:
             logging.info("Job %s finished | status=%s | duration=%.1fs", processing_path.stem, status, time.monotonic() - started)
         except DailyQuotaExceededError as exc:
             failure_time = time.time()
-            retry_at = failure_time + DAILY_QUOTA_PAUSE_SECONDS
+            retry_at = daily_quota_retry_at(failure_time)
             job.pop("retry_at", None)
             job.pop("deferred_reason", None)
             job["last_error"] = str(exc)
@@ -324,10 +323,11 @@ class JobQueue:
             logging.warning("Job %s stopped: daily Gemini quota exhausted. New jobs blocked until %s; waiting jobs marked failed.",
                             processing_path.stem, datetime.fromtimestamp(retry_at, timezone.utc).isoformat())
         except ProviderUnavailableError as exc:
-            retry_count = int(job.get("provider_retry_count") or 0) + 1
-            if retry_count <= len(PROVIDER_RETRY_DELAYS):
+            decision = provider_retry_decision(int(job.get("provider_retry_count") or 0), time.time())
+            if decision.state == "deferred":
+                retry_count = decision.retry_count or 0
                 failure_time = time.time()
-                retry_at = failure_time + PROVIDER_RETRY_DELAYS[retry_count - 1]
+                retry_at = decision.retry_at or failure_time
                 job["provider_retry_count"] = retry_count
                 job["retry_at"] = retry_at
                 job["deferred_reason"] = "provider-unavailable"
