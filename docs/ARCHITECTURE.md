@@ -60,6 +60,12 @@ they do not interpret translator filenames or checkpoint fields. Execution and
 observation share the translation module's work-file implementation. A visible
 checkpoint does not by itself imply resumability: partial output must also exist.
 
+`RuntimeContext` is the composition seam for the running process. It carries the
+queue console actions, Bazarr integration, backup maintenance, and HTTP transport
+adapters alongside the worker's shared settings and state paths. The legacy
+module-level functions remain compatibility entry points for direct callers and
+older tests; new runtime composition should depend on the typed context fields.
+
 The direct seam tests in `tests/test_architecture_modules.py` verify policy,
 console actions, and translation-attempt delegation independently of the HTTP
 server and the complete queue lifecycle tests.
