@@ -94,3 +94,10 @@ def scan_source_subtitles(
             if len(items) >= limit:
                 return items
     return items
+
+
+class SubtitleDiscovery:
+    """Interface for finding source subtitles and missing translation targets."""
+
+    def scan(self, roots: list[str], source_languages: list[dict[str, Any]], target_languages: list[dict[str, Any]], limit: int = 200) -> list[dict[str, Any]]:
+        return scan_source_subtitles(roots, source_languages, target_languages, limit)

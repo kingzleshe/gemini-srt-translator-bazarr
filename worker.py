@@ -44,6 +44,7 @@ from gst_worker.queue import (
 from gst_worker.console import ConsoleActions
 from gst_worker.translation_attempt import DEFAULT_ATTEMPT
 from gst_worker.subtitles import scan_source_subtitles
+from gst_worker.runtime import RuntimeContext
 from gst_worker.tmdb import build_tmdb_description
 
 
@@ -501,18 +502,18 @@ def main() -> int:
         worker.run_forever(args.sleep)
         return 0
 
-    ctx = {
-        "queue_dir": queue_dir,
-        "console": worker.console,
-        "settings": settings,
-        "worker": worker,
-        "http": http,
-        "state_dir": state_dir,
-        "config_path": config_path,
-        "postprocess_targets_path": postprocess_targets_path,
-        "static_dir": static_dir,
-        "log_dir": log_dir,
-    }
+    ctx = RuntimeContext(
+        queue_dir=queue_dir,
+        console=worker.console,
+        settings=settings,
+        worker=worker,
+        http=http,
+        state_dir=state_dir,
+        config_path=config_path,
+        postprocess_targets_path=postprocess_targets_path,
+        static_dir=static_dir,
+        log_dir=log_dir,
+    ).as_handler_context()
     if not args.no_worker:
         threading.Thread(target=worker.run_forever, args=(args.sleep,), daemon=True).start()
     start_web_server(ctx, args.host, args.port)

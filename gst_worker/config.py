@@ -241,3 +241,17 @@ def supported_languages(http: Any, bazarr_url: str, api_key: str) -> list[dict[s
         seen.add(code)
         languages.append(normalized)
     return languages
+
+
+class ConfigurationStore:
+    """Deep interface for normalized configuration persistence."""
+
+    def __init__(self, path: str, postprocess_targets_path: str | None = None) -> None:
+        self.path = path
+        self.postprocess_targets_path = postprocess_targets_path
+
+    def load(self) -> dict[str, Any]:
+        return load_app_config(self.path)
+
+    def save(self, config: dict[str, Any]) -> dict[str, Any]:
+        return save_app_config(self.path, config, self.postprocess_targets_path)
