@@ -9,6 +9,19 @@ from pathlib import Path
 from unittest.mock import patch
 
 import worker
+from gst_worker import (
+    backups as gst_backups,
+    bazarr as gst_bazarr,
+    config as gst_config,
+    connection_tests as gst_connection_tests,
+    gemini as gst_gemini,
+    http as gst_http,
+    logs as gst_logs,
+    queue as gst_queue,
+    subtitles as gst_subtitles,
+    tmdb as gst_tmdb,
+    translation as gst_translation,
+)
 
 
 class FakeHTTP:
@@ -27,47 +40,47 @@ class FakeHTTP:
 
 
 class WorkerTests(unittest.TestCase):
-    def test_zh_output_path_replaces_english_language_code(self):
+    def test_target_output_path_replaces_english_language_code(self):
         self.assertEqual(
-            worker.zh_output_path("/media/Movie/Test.Movie.en.srt"),
+            gst_subtitles.target_output_path("/media/Movie/Test.Movie.en.srt", "zh"),
             "/media/Movie/Test.Movie.zh.srt",
         )
         self.assertEqual(
-            worker.zh_output_path("/media/Show/Episode.eng.srt"),
+            gst_subtitles.target_output_path("/media/Show/Episode.eng.srt", "zh"),
             "/media/Show/Episode.zh.srt",
         )
         self.assertEqual(
-            worker.zh_output_path("/media/Show/Episode.en.hi.srt"),
+            gst_subtitles.target_output_path("/media/Show/Episode.en.hi.srt", "zh"),
             "/media/Show/Episode.zh.hi.srt",
         )
 
     def test_target_output_path_replaces_english_with_configured_target(self):
         self.assertEqual(
-            worker.target_output_path("/media/Movie/Test.Movie.en.srt", "zt"),
+            gst_subtitles.target_output_path("/media/Movie/Test.Movie.en.srt", "zt"),
             "/media/Movie/Test.Movie.zt.srt",
         )
         self.assertEqual(
-            worker.target_output_path("/media/Show/Episode.eng.srt", "ja"),
+            gst_subtitles.target_output_path("/media/Show/Episode.eng.srt", "ja"),
             "/media/Show/Episode.ja.srt",
         )
 
     def test_target_output_path_replaces_configured_source_language(self):
         self.assertEqual(
-            worker.target_output_path("/media/Movie/Test.Movie.ja.srt", "zh", source_code="ja"),
+            gst_subtitles.target_output_path("/media/Movie/Test.Movie.ja.srt", "zh", source_code="ja"),
             "/media/Movie/Test.Movie.zh.srt",
         )
         self.assertEqual(
-            worker.target_output_path("/media/Show/Episode.ko.sdh.srt", "en", source_code="ko"),
+            gst_subtitles.target_output_path("/media/Show/Episode.ko.sdh.srt", "en", source_code="ko"),
             "/media/Show/Episode.en.sdh.srt",
         )
 
     def test_enabled_source_languages_default_to_english(self):
         self.assertEqual(
-            worker.enabled_source_languages({}),
+            gst_config.enabled_source_languages({}),
             [{"code": "en", "language": "English", "enabled": True}],
         )
         self.assertEqual(
-            worker.enabled_source_languages(
+            gst_config.enabled_source_languages(
                 {
                     "source_languages": [
                         {"code": "en", "language": "English", "enabled": False},
@@ -80,11 +93,11 @@ class WorkerTests(unittest.TestCase):
 
     def test_enabled_target_languages_default_to_simplified_chinese(self):
         self.assertEqual(
-            worker.enabled_target_languages({}),
+            gst_config.enabled_target_languages({}),
             [{"code": "zh", "language": "Simplified Chinese", "enabled": True}],
         )
         self.assertEqual(
-            worker.enabled_target_languages(
+            gst_config.enabled_target_languages(
                 {
                     "target_languages": [
                         {"code": "zh", "language": "Simplified Chinese", "enabled": False},
@@ -109,7 +122,7 @@ class WorkerTests(unittest.TestCase):
             }
         )
 
-        languages = worker.supported_languages(http, "http://bazarr:6767", "key")
+        languages = gst_config.supported_languages(http, "http://bazarr:6767", "key")
 
         self.assertEqual(
             languages,
@@ -143,7 +156,7 @@ class WorkerTests(unittest.TestCase):
             config_path = Path(tmp) / "config.json"
             targets_path = Path(tmp) / "targets.json"
 
-            saved = worker.save_app_config(
+            saved = gst_config.save_app_config(
                 str(config_path),
                 {
                     "source_languages": [
@@ -184,7 +197,7 @@ class WorkerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"
 
-            saved = worker.save_app_config(
+            saved = gst_config.save_app_config(
                 str(config_path),
                 {
                     "gst_model": "gemini-2.5-flash",
@@ -232,7 +245,7 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(saved["job_settle_seconds"], 600)
 
     def test_default_gst_tuning_matches_recommended_automation_profile(self):
-        config = worker.normalize_app_config({"gst_no_context": True})
+        config = gst_config.normalize_app_config({"gst_no_context": True})
 
         self.assertEqual(config["gst_model"], "gemini-flash-latest")
         self.assertEqual(config["gst_batch_size"], 500)
@@ -249,8 +262,8 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(config["gst_context_size"], 50)
         self.assertNotIn("gst_no_context", config)
 
-    def test_normalize_app_config_migrates_legacy_three_batch_profile(self):
-        config = worker.normalize_app_config(
+    def test_normalize_app_config_preserves_explicit_batch_sizes(self):
+        config = gst_config.normalize_app_config(
             {
                 "gst_batch_size": 1000,
                 "gst_retry_batch_size": 500,
@@ -258,14 +271,14 @@ class WorkerTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(config["gst_batch_size"], 500)
-        self.assertEqual(config["gst_retry_batch_size"], 300)
+        self.assertEqual(config["gst_batch_size"], 1000)
+        self.assertEqual(config["gst_retry_batch_size"], 500)
         self.assertNotIn("gst_resume_fallback_batch_size", config)
 
     def test_save_app_config_preserves_blank_secret_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"
-            worker.save_app_config(
+            gst_config.save_app_config(
                 str(config_path),
                 {
                     "bazarr_api_key": "bazarr-secret",
@@ -275,7 +288,7 @@ class WorkerTests(unittest.TestCase):
                 },
             )
 
-            saved = worker.save_app_config(
+            saved = gst_config.save_app_config(
                 str(config_path),
                 {
                     "bazarr_url": "http://new-bazarr:6767",
@@ -294,7 +307,7 @@ class WorkerTests(unittest.TestCase):
     def test_save_app_config_preserves_masked_secret_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"
-            worker.save_app_config(
+            gst_config.save_app_config(
                 str(config_path),
                 {
                     "bazarr_api_key": "bazarr-secret",
@@ -304,7 +317,7 @@ class WorkerTests(unittest.TestCase):
                 },
             )
 
-            saved = worker.save_app_config(
+            saved = gst_config.save_app_config(
                 str(config_path),
                 {
                     "bazarr_api_key": "**********",
@@ -322,7 +335,7 @@ class WorkerTests(unittest.TestCase):
     def test_public_app_config_hides_secret_values(self):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"
-            worker.save_app_config(
+            gst_config.save_app_config(
                 str(config_path),
                 {
                     "bazarr_url": "http://bazarr:6767",
@@ -347,7 +360,7 @@ class WorkerTests(unittest.TestCase):
     def test_load_settings_reads_app_secret_values(self):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"
-            worker.save_app_config(
+            gst_config.save_app_config(
                 str(config_path),
                 {
                     "bazarr_url": "http://bazarr.local:6767",
@@ -367,7 +380,7 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(settings["tmdb_api_key"], "tmdb-secret")
 
     def test_translation_environment_uses_configured_gemini_keys(self):
-        env = worker.translation_environment(
+        env = gst_translation.translation_environment(
             {
                 "gemini_api_key": "gemini-secret",
                 "gemini_api_key2": "gemini-secret-2",
@@ -383,7 +396,7 @@ class WorkerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"
             targets_path = Path(tmp) / "targets.json"
-            worker.save_app_config(str(config_path), {"bazarr_url": "http://old:6767"})
+            gst_config.save_app_config(str(config_path), {"bazarr_url": "http://old:6767"})
 
             seeded = worker.seed_app_config_from_settings(
                 str(config_path),
@@ -414,7 +427,7 @@ class WorkerTests(unittest.TestCase):
             config_path.write_text('{"gemini_api_key":"secret"}', encoding="utf-8")
             targets_path.write_text('{"target_languages":[]}', encoding="utf-8")
 
-            backup = worker.create_backup(str(root / "state"), str(config_path), str(targets_path), reason="manual")
+            backup = gst_backups.create_backup(str(root / "state"), str(config_path), str(targets_path), reason="manual")
 
             self.assertTrue(Path(backup["path"]).exists())
             self.assertEqual(backup["name"], Path(backup["path"]).name)
@@ -435,11 +448,11 @@ class WorkerTests(unittest.TestCase):
             backup_path = backup_dir / "safe.zip"
             backup_path.write_bytes(b"zip")
 
-            self.assertEqual(worker.backup_file_path(tmp, "safe.zip"), backup_path)
+            self.assertEqual(gst_backups.backup_file_path(tmp, "safe.zip"), backup_path)
 
             for name in ("", "../safe.zip", "..\\safe.zip", "/tmp/safe.zip", "missing.zip"):
                 with self.assertRaises(ValueError):
-                    worker.backup_file_path(tmp, name)
+                    gst_backups.backup_file_path(tmp, name)
 
     def test_restore_backup_archive_writes_config_and_targets_after_pre_import_backup(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -457,7 +470,7 @@ class WorkerTests(unittest.TestCase):
                 archive.writestr("config/config.json", '{"gemini_api_key":"new"}')
                 archive.writestr("postprocess/targets.json", '{"target_languages":[{"code":"en"}]}')
 
-            result = worker.restore_backup_archive(
+            result = gst_backups.restore_backup_archive(
                 payload.getvalue(),
                 str(root / "state"),
                 str(config_path),
@@ -481,7 +494,7 @@ class WorkerTests(unittest.TestCase):
             targets_path.write_text('{"target_languages":[]}', encoding="utf-8")
 
             with self.assertRaises(ValueError):
-                worker.restore_backup_archive(
+                gst_backups.restore_backup_archive(
                     b"not a zip",
                     str(root / "state"),
                     str(config_path),
@@ -503,7 +516,7 @@ class WorkerTests(unittest.TestCase):
             os.utime(older, (now - 20, now - 20))
             os.utime(newer, (now - 10, now - 10))
 
-            backups = worker.list_backups(tmp)
+            backups = gst_backups.list_backups(tmp)
 
             self.assertEqual([item["name"] for item in backups], ["newer.zip", "older.zip"])
 
@@ -519,7 +532,7 @@ class WorkerTests(unittest.TestCase):
             os.utime(old, (now - 31 * 86400, now - 31 * 86400))
             os.utime(recent, (now - 29 * 86400, now - 29 * 86400))
 
-            deleted = worker.purge_old_backups(tmp, now=now, retention_days=30)
+            deleted = gst_backups.purge_old_backups(tmp, now=now, retention_days=30)
 
             self.assertEqual(deleted, [str(old)])
             self.assertFalse(old.exists())
@@ -536,9 +549,9 @@ class WorkerTests(unittest.TestCase):
             targets_path.write_text('{"target_languages":[]}', encoding="utf-8")
             now = 2_000_000
 
-            first = worker.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now)
-            second = worker.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now + 6 * 86400)
-            third = worker.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now + 8 * 86400)
+            first = gst_backups.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now)
+            second = gst_backups.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now + 6 * 86400)
+            third = gst_backups.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now + 8 * 86400)
 
             self.assertIsNotNone(first)
             self.assertIsNone(second)
@@ -557,8 +570,8 @@ class WorkerTests(unittest.TestCase):
             targets_path.write_text('{"target_languages":[]}', encoding="utf-8")
             now = 2_000_000
 
-            worker.create_backup(str(root / "state"), str(config_path), str(targets_path), reason="manual", now=now)
-            scheduled = worker.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now + 60)
+            gst_backups.create_backup(str(root / "state"), str(config_path), str(targets_path), reason="manual", now=now)
+            scheduled = gst_backups.create_scheduled_backup_if_due(str(root / "state"), str(config_path), str(targets_path), now=now + 60)
 
             self.assertIsNotNone(scheduled)
             self.assertIn("scheduled", scheduled["name"])
@@ -566,7 +579,7 @@ class WorkerTests(unittest.TestCase):
     def test_settings_from_payload_uses_mask_as_existing_secret(self):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.json"
-            worker.save_app_config(
+            gst_config.save_app_config(
                 str(config_path),
                 {
                     "bazarr_url": "http://old:6767",
@@ -610,9 +623,9 @@ class WorkerTests(unittest.TestCase):
             "tmdb_api_key": "tmdb-secret",
         }
 
-        self.assertTrue(worker.test_connection("bazarr", settings, http)["ok"])
-        self.assertTrue(worker.test_connection("gemini_api_key", settings, http)["ok"])
-        self.assertTrue(worker.test_connection("tmdb_api_key", settings, http)["ok"])
+        self.assertTrue(gst_connection_tests.test_connection("bazarr", settings, http)["ok"])
+        self.assertTrue(gst_connection_tests.test_connection("gemini_api_key", settings, http)["ok"])
+        self.assertTrue(gst_connection_tests.test_connection("tmdb_api_key", settings, http)["ok"])
         self.assertEqual(
             http.calls,
             [
@@ -637,7 +650,7 @@ class WorkerTests(unittest.TestCase):
             }
         )
 
-        models = worker.gemini_models(http, {"gemini_api_key": "gemini-secret"})
+        models = gst_gemini.gemini_models(http, {"gemini_api_key": "gemini-secret"})
 
         self.assertEqual(models[0], {"id": "gemini-2.5-flash", "name": "gemini-2.5-flash"})
         self.assertNotIn("embedding-001", [item["id"] for item in models])
@@ -648,7 +661,7 @@ class WorkerTests(unittest.TestCase):
             log_path = Path(tmp) / "worker.log"
             log_path.write_text("line one\nline two\n", encoding="utf-8")
 
-            result = worker.clear_logs(tmp)
+            result = gst_logs.clear_logs(tmp)
 
             self.assertTrue(result)
             self.assertEqual(log_path.read_text(encoding="utf-8"), "")
@@ -687,15 +700,15 @@ class WorkerTests(unittest.TestCase):
             output = Path(tmp) / "Episode.zh.srt"
             output.write_text("translated", encoding="utf-8")
 
-            self.assertTrue(worker.should_skip_job({"provider": "opensubtitles", "language": "ja", "subtitle_path": str(subtitle)}))
+            self.assertTrue(gst_queue.should_skip_job({"provider": "opensubtitles", "language": "ja", "subtitle_path": str(subtitle)}))
             self.assertTrue(
-                worker.should_skip_job(
+                gst_queue.should_skip_job(
                     {"provider": "embeddedsubtitles", "source_code": "ja", "target_code": "ja", "subtitle_path": str(subtitle)}
                 )
             )
-            self.assertTrue(worker.should_skip_job({"provider": "embeddedsubtitles", "language": "ja", "subtitle_path": str(subtitle), "target_code": "zh"}))
+            self.assertTrue(gst_queue.should_skip_job({"provider": "embeddedsubtitles", "language": "ja", "subtitle_path": str(subtitle), "target_code": "zh"}))
             output.unlink()
-            self.assertFalse(worker.should_skip_job({"provider": "embeddedsubtitles", "language": "ja", "subtitle_path": str(subtitle), "target_code": "zh"}))
+            self.assertFalse(gst_queue.should_skip_job({"provider": "embeddedsubtitles", "language": "ja", "subtitle_path": str(subtitle), "target_code": "zh"}))
 
     def test_job_should_skip_when_configured_target_output_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -705,7 +718,7 @@ class WorkerTests(unittest.TestCase):
             output.write_text("translated", encoding="utf-8")
 
             self.assertTrue(
-                worker.should_skip_job(
+                gst_queue.should_skip_job(
                     {
                         "provider": "embeddedsubtitles",
                         "source_code": "en",
@@ -718,7 +731,7 @@ class WorkerTests(unittest.TestCase):
 
             output.unlink()
             self.assertFalse(
-                worker.should_skip_job(
+                gst_queue.should_skip_job(
                     {
                         "provider": "embeddedsubtitles",
                         "source_code": "en",
@@ -736,7 +749,7 @@ class WorkerTests(unittest.TestCase):
             subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
             (Path(tmp) / "Movie.zh.srt").write_text("existing", encoding="utf-8")
 
-            created = worker.enqueue_translation_jobs(
+            created = gst_queue.enqueue_translation_jobs(
                 queue_dir=str(queue_dir),
                 base_job={
                     "video_path": str(Path(tmp) / "Movie.mkv"),
@@ -775,14 +788,14 @@ class WorkerTests(unittest.TestCase):
             }
             targets = [{"code": "zh", "language": "Simplified Chinese", "enabled": True}]
 
-            [pending_path_string] = worker.enqueue_translation_jobs(str(queue_dir), base_job, targets)
+            [pending_path_string] = gst_queue.enqueue_translation_jobs(str(queue_dir), base_job, targets)
             pending_path = Path(pending_path_string)
             failed_path = queue_dir / "failed" / pending_path.name
             pending_path.replace(failed_path)
             failed_path.with_suffix(".error").write_text("gst failed with exit 1", encoding="utf-8")
 
-            created = worker.enqueue_translation_jobs(str(queue_dir), base_job, targets)
-            snapshot = worker.queue_snapshot(str(queue_dir))
+            created = gst_queue.enqueue_translation_jobs(str(queue_dir), base_job, targets)
+            snapshot = gst_queue.queue_snapshot(str(queue_dir))
 
             self.assertEqual(created, [str(pending_path)])
             self.assertEqual(snapshot["counts"]["pending"], 1)
@@ -795,7 +808,7 @@ class WorkerTests(unittest.TestCase):
             subtitle = Path(tmp) / "Movie.zh.srt"
             subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\n你好\n", encoding="utf-8")
 
-            created = worker.enqueue_translation_jobs(
+            created = gst_queue.enqueue_translation_jobs(
                 queue_dir=str(queue_dir),
                 base_job={
                     "video_path": str(Path(tmp) / "Movie.mkv"),
@@ -826,7 +839,7 @@ class WorkerTests(unittest.TestCase):
             (queue_dir / "failed" / "b.json").write_text('{"job_id":"b"}', encoding="utf-8")
             (queue_dir / "failed" / "b.error").write_text("boom", encoding="utf-8")
 
-            snapshot = worker.queue_snapshot(str(queue_dir))
+            snapshot = gst_queue.queue_snapshot(str(queue_dir))
 
             self.assertEqual(snapshot["counts"]["pending"], 1)
             self.assertEqual(snapshot["counts"]["failed"], 1)
@@ -842,11 +855,11 @@ class WorkerTests(unittest.TestCase):
             job.write_text('{"job_id":"cancel-me"}', encoding="utf-8")
             error.write_text("quota exhausted", encoding="utf-8")
 
-            self.assertTrue(worker.cancel_failed_job(str(queue_dir), "cancel-me"))
+            self.assertTrue(gst_queue.cancel_failed_job(str(queue_dir), "cancel-me"))
             self.assertFalse(job.exists())
             self.assertFalse(error.exists())
             self.assertFalse((queue_dir / "pending" / "cancel-me.json").exists())
-            self.assertFalse(worker.cancel_failed_job(str(queue_dir), "cancel-me"))
+            self.assertFalse(gst_queue.cancel_failed_job(str(queue_dir), "cancel-me"))
 
     def test_retry_failed_job_starts_a_fresh_provider_retry_cycle(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -868,7 +881,7 @@ class WorkerTests(unittest.TestCase):
             )
             failed.with_suffix(".error").write_text("503 UNAVAILABLE", encoding="utf-8")
 
-            self.assertTrue(worker.retry_failed_job(str(queue_dir), "retry-me"))
+            self.assertTrue(gst_queue.retry_failed_job(str(queue_dir), "retry-me"))
 
             pending = json.loads((queue_dir / "pending" / "retry-me.json").read_text(encoding="utf-8"))
             self.assertNotIn("provider_retry_count", pending)
@@ -900,7 +913,7 @@ class WorkerTests(unittest.TestCase):
             queue_worker = worker.QueueWorker(
                 str(queue_dir),
                 {"bazarr_url": "http://bazarr:6767", "bazarr_api_key": "", "tmdb_api_key": "", "job_settle_seconds": 120},
-                worker.MemoryCache(),
+                gst_http.MemoryCache(),
                 FakeHTTP({}),
             )
 
@@ -916,7 +929,7 @@ class WorkerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             queue_dir = root / "queue"
-            worker.ensure_queue_dirs(str(queue_dir))
+            gst_queue.ensure_queue_dirs(str(queue_dir))
             subtitle = root / "Movie.en.srt"
             output = root / "Movie.zh.srt"
             subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
@@ -934,7 +947,7 @@ class WorkerTests(unittest.TestCase):
             queue_worker = worker.QueueWorker(
                 str(queue_dir),
                 {"bazarr_url": "http://bazarr:6767", "bazarr_api_key": "", "tmdb_api_key": "", "job_settle_seconds": 120},
-                worker.MemoryCache(),
+                gst_http.MemoryCache(),
                 FakeHTTP({}),
             )
 
@@ -945,7 +958,7 @@ class WorkerTests(unittest.TestCase):
     def test_queue_worker_defers_503_and_retries_only_after_retry_at(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
-            worker.ensure_queue_dirs(str(queue_dir))
+            gst_queue.ensure_queue_dirs(str(queue_dir))
             job = {
                 "job_id": "overloaded",
                 "created_at": 1_000,
@@ -958,13 +971,13 @@ class WorkerTests(unittest.TestCase):
             queue_worker = worker.QueueWorker(
                 str(queue_dir),
                 {"job_settle_seconds": 0},
-                worker.MemoryCache(),
+                gst_http.MemoryCache(),
                 FakeHTTP({}),
             )
 
             with patch(
                 "worker.process_job",
-                side_effect=[worker.ProviderUnavailableError("503 UNAVAILABLE"), "translated"],
+                side_effect=[gst_translation.ProviderUnavailableError("503 UNAVAILABLE"), "translated"],
             ) as process_job, patch("worker.time.time", return_value=1_300):
                 self.assertTrue(queue_worker.process_once(now=1_000))
                 deferred_path = queue_dir / "deferred" / "overloaded.json"
@@ -982,7 +995,7 @@ class WorkerTests(unittest.TestCase):
     def test_processing_snapshot_includes_runtime_status_and_checkpoint(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
-            worker.ensure_queue_dirs(str(queue_dir))
+            gst_queue.ensure_queue_dirs(str(queue_dir))
             subtitle = Path(tmp) / "Movie.en.srt"
             output = Path(tmp) / "Movie.zh.srt"
             subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
@@ -997,7 +1010,7 @@ class WorkerTests(unittest.TestCase):
             }
             (queue_dir / "processing" / "active.json").write_text(json.dumps(job), encoding="utf-8")
 
-            snapshot = worker.queue_snapshot(str(queue_dir))
+            snapshot = gst_queue.queue_snapshot(str(queue_dir))
 
             active = snapshot["processing"][0]
             self.assertEqual(active["stage"], "Sending subtitle batches to Gemini")
@@ -1007,11 +1020,11 @@ class WorkerTests(unittest.TestCase):
     def test_queue_worker_recovers_interrupted_processing_job_on_startup(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
-            worker.ensure_queue_dirs(str(queue_dir))
+            gst_queue.ensure_queue_dirs(str(queue_dir))
             interrupted = {"job_id": "interrupted", "stage": "Sending subtitle batches to Gemini"}
             (queue_dir / "processing" / "interrupted.json").write_text(json.dumps(interrupted), encoding="utf-8")
 
-            worker.QueueWorker(str(queue_dir), {"job_settle_seconds": 0}, worker.MemoryCache(), FakeHTTP({}))
+            worker.QueueWorker(str(queue_dir), {"job_settle_seconds": 0}, gst_http.MemoryCache(), FakeHTTP({}))
 
             recovered_path = queue_dir / "pending" / "interrupted.json"
             self.assertTrue(recovered_path.exists())
@@ -1022,7 +1035,7 @@ class WorkerTests(unittest.TestCase):
     def test_daily_quota_blocks_enqueue_and_retry_until_expiry(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
-            worker.ensure_queue_dirs(str(queue_dir))
+            gst_queue.ensure_queue_dirs(str(queue_dir))
             source = Path(tmp) / "movie.en.srt"
             source.write_text("subtitle", encoding="utf-8")
             pause = queue_dir / "provider-pause.json"
@@ -1033,18 +1046,18 @@ class WorkerTests(unittest.TestCase):
             targets = [{"code": "zh", "language": "Chinese", "enabled": True}]
             with patch("gst_worker.queue.time.time", return_value=1000):
                 with self.assertRaisesRegex(ValueError, "Daily Gemini quota"):
-                    worker.enqueue_translation_jobs(str(queue_dir), base, targets)
+                    gst_queue.enqueue_translation_jobs(str(queue_dir), base, targets)
                 with self.assertRaisesRegex(ValueError, "Daily Gemini quota"):
-                    worker.retry_failed_job(str(queue_dir), "retry")
+                    gst_queue.retry_failed_job(str(queue_dir), "retry")
             self.assertTrue(failed.exists())
             self.assertEqual(list((queue_dir / "pending").glob("*.json")), [])
             with patch("gst_worker.queue.time.time", return_value=2001):
-                self.assertEqual(len(worker.enqueue_translation_jobs(str(queue_dir), base, targets)), 1)
-                self.assertTrue(worker.retry_failed_job(str(queue_dir), "retry"))
+                self.assertEqual(len(gst_queue.enqueue_translation_jobs(str(queue_dir), base, targets)), 1)
+                self.assertTrue(gst_queue.retry_failed_job(str(queue_dir), "retry"))
 
     def test_cancel_pending_preserves_processing_job(self):
         with tempfile.TemporaryDirectory() as tmp:
-            worker.ensure_queue_dirs(tmp)
+            gst_queue.ensure_queue_dirs(tmp)
             pending = Path(tmp) / "pending" / "cancel.json"
             processing = Path(tmp) / "processing" / "active.json"
             pending.write_text("{}", encoding="utf-8")
@@ -1057,7 +1070,7 @@ class WorkerTests(unittest.TestCase):
     def test_queue_worker_daily_quota_pauses_other_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
-            worker.ensure_queue_dirs(str(queue_dir))
+            gst_queue.ensure_queue_dirs(str(queue_dir))
             for job_id in ("first", "second"):
                 job = {
                     "job_id": job_id,
@@ -1071,13 +1084,13 @@ class WorkerTests(unittest.TestCase):
             queue_worker = worker.QueueWorker(
                 str(queue_dir),
                 {"job_settle_seconds": 0},
-                worker.MemoryCache(),
+                gst_http.MemoryCache(),
                 FakeHTTP({}),
             )
 
             with patch(
                 "worker.process_job",
-                side_effect=worker.DailyQuotaExceededError("429 daily quota exhausted"),
+                side_effect=gst_translation.DailyQuotaExceededError("429 daily quota exhausted"),
             ) as process_job, patch("worker.time.time", return_value=1_000):
                 self.assertTrue(queue_worker.process_once(now=1_000))
                 self.assertFalse(queue_worker.process_once(now=1_001))
@@ -1092,7 +1105,7 @@ class WorkerTests(unittest.TestCase):
     def test_queue_worker_fails_503_after_three_delayed_retries(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
-            worker.ensure_queue_dirs(str(queue_dir))
+            gst_queue.ensure_queue_dirs(str(queue_dir))
             job = {
                 "job_id": "still-overloaded",
                 "created_at": 1_000,
@@ -1107,13 +1120,13 @@ class WorkerTests(unittest.TestCase):
             queue_worker = worker.QueueWorker(
                 str(queue_dir),
                 {"job_settle_seconds": 0},
-                worker.MemoryCache(),
+                gst_http.MemoryCache(),
                 FakeHTTP({}),
             )
 
             with patch(
                 "worker.process_job",
-                side_effect=worker.ProviderUnavailableError("503 UNAVAILABLE"),
+                side_effect=gst_translation.ProviderUnavailableError("503 UNAVAILABLE"),
             ):
                 self.assertTrue(queue_worker.process_once(now=1_000))
 
@@ -1134,7 +1147,7 @@ class WorkerTests(unittest.TestCase):
                 return type("Result", (), {"returncode": 0, "stderr": ""})()
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                status = worker.run_translation(
+                status = gst_translation.run_translation(
                     {
                         "subtitle_path": str(subtitle),
                         "output_path": str(output),
@@ -1166,7 +1179,7 @@ class WorkerTests(unittest.TestCase):
                 return type("Result", (), {"returncode": 0, "stderr": ""})()
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                status = worker.run_translation(
+                status = gst_translation.run_translation(
                     {
                         "subtitle_path": str(subtitle),
                         "output_path": str(output),
@@ -1208,7 +1221,7 @@ class WorkerTests(unittest.TestCase):
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                status = worker.run_translation(
+                status = gst_translation.run_translation(
                     {
                         "subtitle_path": str(subtitle),
                         "output_path": str(output),
@@ -1245,8 +1258,8 @@ class WorkerTests(unittest.TestCase):
             )()
 
             with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
-                with self.assertRaises(worker.ProviderUnavailableError):
-                    worker.run_translation(
+                with self.assertRaises(gst_translation.ProviderUnavailableError):
+                    gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),
                             "output_path": str(output),
@@ -1279,8 +1292,8 @@ class WorkerTests(unittest.TestCase):
             )()
 
             with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
-                with self.assertRaises(worker.DailyQuotaExceededError):
-                    worker.run_translation(
+                with self.assertRaises(gst_translation.DailyQuotaExceededError):
+                    gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),
                             "output_path": str(output),
@@ -1312,7 +1325,7 @@ class WorkerTests(unittest.TestCase):
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                status = worker.run_translation(
+                status = gst_translation.run_translation(
                     {
                         "subtitle_path": str(subtitle),
                         "output_path": str(output),
@@ -1348,7 +1361,7 @@ class WorkerTests(unittest.TestCase):
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
                 with self.assertRaises(RuntimeError):
-                    worker.run_translation(
+                    gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),
                             "output_path": str(output),
@@ -1390,8 +1403,8 @@ class WorkerTests(unittest.TestCase):
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
             with patch("gst_worker.translation.subprocess.run", side_effect=fake_run):
-                with self.assertRaises(worker.ProviderUnavailableError):
-                    worker.run_translation(
+                with self.assertRaises(gst_translation.ProviderUnavailableError):
+                    gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),
                             "output_path": str(output),
@@ -1425,7 +1438,7 @@ class WorkerTests(unittest.TestCase):
                 )(),
             ):
                 with self.assertRaisesRegex(RuntimeError, "useful stdout failure detail"):
-                    worker.run_translation(
+                    gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),
                             "output_path": str(output),
@@ -1443,7 +1456,7 @@ class WorkerTests(unittest.TestCase):
             (root / "Show" / "Episode.ja.srt").write_text("hello", encoding="utf-8")
             (root / "Show" / "Episode.zh.srt").write_text("existing", encoding="utf-8")
 
-            items = worker.scan_source_subtitles(
+            items = gst_subtitles.scan_source_subtitles(
                 roots=[str(root)],
                 source_languages=[
                     {"code": "en", "language": "English", "enabled": True},
@@ -1480,14 +1493,14 @@ class WorkerTests(unittest.TestCase):
             "media_id": "781",
         }
 
-        description = worker.build_tmdb_description(
+        description = gst_tmdb.build_tmdb_description(
             job,
             bazarr=FakeHTTP(),
             tmdb=http,
             bazarr_url="http://bazarr:6767",
             bazarr_api_key="bazarr-key",
             tmdb_api_key="tmdb-key",
-            cache=worker.MemoryCache(),
+            cache=gst_http.MemoryCache(),
         )
 
         self.assertIn("Overview: A smart graduate works for a fashion editor.", description)
@@ -1521,14 +1534,14 @@ class WorkerTests(unittest.TestCase):
         })
         job = {"media_type": "series", "series_id": "257", "media_id": "14569"}
 
-        description = worker.build_tmdb_description(
+        description = gst_tmdb.build_tmdb_description(
             job,
             bazarr=bazarr,
             tmdb=tmdb,
             bazarr_url="http://bazarr:6767",
             bazarr_api_key="bazarr-key",
             tmdb_api_key="tmdb-key",
-            cache=worker.MemoryCache(),
+            cache=gst_http.MemoryCache(),
         )
 
         self.assertIn("Episode Overview: Episode overview", description)
@@ -1537,13 +1550,13 @@ class WorkerTests(unittest.TestCase):
 
     def test_refresh_bazarr_uses_series_or_movie_scan_disk(self):
         http = FakeHTTP()
-        worker.refresh_bazarr(
+        gst_bazarr.refresh_bazarr(
             {"media_type": "series", "series_id": "257", "media_id": "14569"},
             http=http,
             bazarr_url="http://bazarr:6767",
             api_key="bazarr-key",
         )
-        worker.refresh_bazarr(
+        gst_bazarr.refresh_bazarr(
             {"media_type": "movie", "media_id": "781"},
             http=http,
             bazarr_url="http://bazarr:6767",
@@ -1559,7 +1572,7 @@ class WorkerTests(unittest.TestCase):
         )
 
     def test_build_gst_command_uses_job_target_language(self):
-        command = worker.build_gst_command(
+        command = gst_translation.build_gst_command(
             "/media/Movie.en.srt",
             "/media/Movie.zt.srt",
             "",
@@ -1569,7 +1582,7 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(command[command.index("-l") + 1], "Traditional Chinese")
 
     def test_build_gst_command_uses_configured_gst_settings(self):
-        command = worker.build_gst_command(
+        command = gst_translation.build_gst_command(
             "/media/Movie.en.srt",
             "/media/Movie.zh.srt",
             "",
@@ -1614,7 +1627,7 @@ class WorkerTests(unittest.TestCase):
         self.assertNotIn("--quiet", command)
 
     def test_build_gst_command_uses_one_thinking_option_when_both_are_configured(self):
-        flash_25_command = worker.build_gst_command(
+        flash_25_command = gst_translation.build_gst_command(
             "/media/Movie.en.srt",
             "/media/Movie.zh.srt",
             "",
@@ -1624,7 +1637,7 @@ class WorkerTests(unittest.TestCase):
                 "gst_thinking_level": "medium",
             },
         )
-        flash_latest_command = worker.build_gst_command(
+        flash_latest_command = gst_translation.build_gst_command(
             "/media/Movie.en.srt",
             "/media/Movie.zh.srt",
             "",

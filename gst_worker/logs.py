@@ -10,7 +10,7 @@ from pathlib import Path
 
 MAX_LOG_BYTES = 512 * 1024
 LOG_HEADER = re.compile(
-    r"^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z)?) "
+    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) "
     r"(DEBUG|INFO|WARNING|ERROR|CRITICAL) (.*)$"
 )
 
@@ -30,7 +30,7 @@ def read_log_snapshot(log_dir: str, limit: int = 200) -> dict:
             stream.seek(offset)
             raw = stream.read(MAX_LOG_BYTES)
     except FileNotFoundError:
-        return {"entries": [], "lines": [], "truncated": False}
+        return {"entries": [], "truncated": False}
     if offset:
         raw = raw.partition(b"\n")[2]
     lines = raw.decode("utf-8", errors="replace").splitlines()
@@ -46,7 +46,6 @@ def read_log_snapshot(log_dir: str, limit: int = 200) -> dict:
             entries.append({"timestamp": "", "level": "INFO", "message": line, "details": ""})
     return {
         "entries": entries[-limit:],
-        "lines": lines[-limit:],  # Preserve the original API for text clients.
         "truncated": offset > 0 or len(entries) > limit,
     }
 

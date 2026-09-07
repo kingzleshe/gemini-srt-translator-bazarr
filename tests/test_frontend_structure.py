@@ -95,21 +95,6 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("switchView(viewFromHash())", app_js)
 
 
-class BackendPackageBoundaryTests(unittest.TestCase):
-    def test_worker_reexports_split_package_helpers(self):
-        import worker
-        from gst_worker import backups, bazarr, config, http, queue, subtitles, tmdb, translation
-
-        self.assertIs(worker.normalize_app_config, config.normalize_app_config)
-        self.assertIs(worker.create_backup, backups.create_backup)
-        self.assertIs(worker.target_output_path, subtitles.target_output_path)
-        self.assertIs(worker.enqueue_translation_jobs, queue.enqueue_translation_jobs)
-        self.assertIs(worker.HTTPClient, http.HTTPClient)
-        self.assertIs(worker.build_tmdb_description, tmdb.build_tmdb_description)
-        self.assertIs(worker.refresh_bazarr, bazarr.refresh_bazarr)
-        self.assertIs(worker.build_gst_command, translation.build_gst_command)
-
-
 class DeploymentConfigTests(unittest.TestCase):
     def test_compose_uses_6789_inside_and_outside_container(self):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")

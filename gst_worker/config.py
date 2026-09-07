@@ -109,14 +109,6 @@ def normalize_app_config(config: dict[str, Any]) -> dict[str, Any]:
             normalized[key] = value
     if isinstance(config, dict):
         normalized.update({key: value for key, value in config.items() if key in normalized})
-        legacy_batch_profile = (
-            str(config.get("gst_batch_size", "")) == "1000"
-            and str(config.get("gst_retry_batch_size", "")) == "500"
-            and str(config.get("gst_resume_fallback_batch_size", "")) == "50"
-        )
-        if legacy_batch_profile:
-            normalized["gst_batch_size"] = 500
-            normalized["gst_retry_batch_size"] = 300
     normalized["source_languages"] = enabled_source_languages(normalized)
     normalized["target_languages"] = enabled_target_languages(normalized)
     media_roots = normalized.get("media_roots")

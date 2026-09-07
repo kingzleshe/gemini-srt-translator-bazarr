@@ -2,7 +2,12 @@
 - Added log level and text filters, live refresh, follow-latest, collapsible
   error details, filtered download, and explicit current-log clearing.
 - Centralized logging in `gst_worker/logs.py` with UTC timestamps, bounded
-  reads, rotation, and backward-compatible log API responses.
+  reads, rotation, and structured log API responses.
+- Removed obsolete single-language helpers and worker re-exports; tests now import
+  domain modules directly. Removed legacy batch-profile migration and log API
+  `lines` / local-timestamp compatibility. Explicit batch sizes are preserved.
+- Removed array-form `targets.json` support; use the object format containing
+  `source_languages` and `target_languages`.
 - Added subtitle and language context, elapsed time, and readable retry times
   to worker job logs.
 

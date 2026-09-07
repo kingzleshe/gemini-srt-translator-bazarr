@@ -3,11 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import DEFAULT_SOURCE_LANGUAGES, enabled_source_languages, enabled_target_languages
-
-
-def zh_output_path(subtitle_path: str) -> str:
-    return target_output_path(subtitle_path, "zh")
+from .config import enabled_source_languages, enabled_target_languages
 
 
 def target_output_path(subtitle_path: str, target_code: str, source_code: str | None = None) -> str:
@@ -28,18 +24,6 @@ def target_output_path(subtitle_path: str, target_code: str, source_code: str | 
             return f"{directory}{'.'.join(parts)}.srt"
 
     return f"{directory}{stem}.{target_code}.srt"
-
-
-def is_english_code(value: str) -> bool:
-    return str(value or "").split(":", 1)[0].lower() in {"en", "eng"}
-
-
-def is_english_subtitle_path(path: str) -> bool:
-    name = Path(path).name.lower()
-    if not name.endswith(".srt"):
-        return False
-    parts = name[:-4].split(".")
-    return any(part in {"en", "eng"} for part in parts)
 
 
 def subtitle_source_language(path: str, source_languages: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -110,7 +94,3 @@ def scan_source_subtitles(
             if len(items) >= limit:
                 return items
     return items
-
-
-def scan_english_subtitles(roots: list[str], targets: list[dict[str, Any]], limit: int = 200) -> list[dict[str, Any]]:
-    return scan_source_subtitles(roots, DEFAULT_SOURCE_LANGUAGES, targets, limit=limit)

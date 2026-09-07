@@ -593,7 +593,7 @@ async function loadLogs() {
   logState.loading = (async () => {
     try {
       const data = await api("/api/logs");
-      const entries = data.entries || (data.lines || []).map((message) => ({ timestamp: "", level: "INFO", message, details: "" }));
+      const entries = data.entries;
       const snapshot = JSON.stringify(entries);
       logState.updated = new Date().toLocaleTimeString();
       logState.truncated = Boolean(data.truncated);

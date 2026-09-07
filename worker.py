@@ -17,80 +17,43 @@ from typing import Any, Callable
 
 from gst_worker.backups import (
     backup_file_path,
-    backup_info,
     create_backup,
     create_scheduled_backup_if_due,
     list_backups,
     purge_old_backups,
     restore_backup_archive,
 )
-from gst_worker.bazarr import (
-    find_english_subtitle,
-    find_source_subtitle,
-    list_wanted_items,
-    missing_enabled_targets,
-    read_bazarr_api_key,
-    refresh_bazarr,
-)
+from gst_worker.bazarr import list_wanted_items, read_bazarr_api_key, refresh_bazarr
 from gst_worker.config import (
-    DEFAULT_APP_CONFIG,
-    DEFAULT_SOURCE_LANGUAGES,
-    DEFAULT_TARGET_LANGUAGES,
-    FALLBACK_LANGUAGES,
-    GEMINI_LANGUAGE_NAMES,
     SECRET_MASK,
     SECRET_CONFIG_KEYS,
     GST_BOOL_CONFIG_KEYS,
     GST_STRING_CONFIG_KEYS,
-    enabled_languages,
-    enabled_source_languages,
-    enabled_target_languages,
     load_app_config,
     normalize_app_config,
-    normalize_bazarr_language,
     save_app_config,
     supported_languages,
 )
 from gst_worker.connection_tests import test_connection
 from gst_worker.gemini import gemini_models
 from gst_worker.logs import clear_logs, configure_logging, read_log_snapshot
-from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache, cached_get_json, first_data
+from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache
 from gst_worker.queue import (
     QUEUE_STATES,
     cancel_failed_job,
     daily_quota_pause_until,
     enqueue_translation_jobs,
     ensure_queue_dirs,
-    job_id_for,
     queue_snapshot,
     retry_failed_job,
     should_skip_job,
 )
-from gst_worker.subtitles import (
-    is_english_code,
-    is_english_subtitle_path,
-    scan_english_subtitles,
-    scan_source_subtitles,
-    subtitle_source_language,
-    subtitle_video_guess,
-    target_output_path,
-    zh_output_path,
-)
-from gst_worker.tmdb import (
-    TMDB_BASE_URL,
-    build_movie_description,
-    build_series_description,
-    build_tmdb_description,
-    extract_tmdb_movie_id,
-    tmdb_find_movie_id,
-    tmdb_find_tv_id,
-)
+from gst_worker.subtitles import scan_source_subtitles
+from gst_worker.tmdb import build_tmdb_description
 from gst_worker.translation import (
     DailyQuotaExceededError,
     ProviderUnavailableError,
-    build_gst_command,
     run_translation,
-    translation_environment,
 )
 
 
@@ -665,9 +628,6 @@ class ConsoleHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             status["bazarr"] = {"error": str(exc)}
         return status
-
-    def tail_log(self, max_lines: int = 200) -> list[str]:
-        return read_log_snapshot(self.ctx["log_dir"], max_lines)["lines"]
 
     def serve_static(self, request_path: str) -> None:
         static_dir = Path(self.ctx["static_dir"])

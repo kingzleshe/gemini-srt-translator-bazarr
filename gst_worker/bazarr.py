@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .config import DEFAULT_SOURCE_LANGUAGES, enabled_source_languages, enabled_target_languages
+from .config import enabled_source_languages, enabled_target_languages
 from .http import HTTPClient, first_data
 
 
@@ -47,7 +47,6 @@ def find_source_subtitle(
     if not isinstance(subtitles, list):
         return {}
     sources = enabled_source_languages({"source_languages": source_languages})
-    by_code = {str(source["code"]).lower(): source for source in sources}
     for source in sources:
         wanted = str(source["code"]).lower()
         for subtitle in subtitles:
@@ -59,20 +58,7 @@ def find_source_subtitle(
                 "code": str(source["code"]),
                 "language": str(source["language"]),
             }
-    for subtitle in subtitles:
-        code = str(subtitle.get("code2") or subtitle.get("code") or "").lower()
-        source = by_code.get(code)
-        if source:
-            return {
-                "path": str(subtitle.get("path") or ""),
-                "code": str(source["code"]),
-                "language": str(source["language"]),
-            }
     return {}
-
-
-def find_english_subtitle(subtitles: list[dict[str, Any]] | None) -> str:
-    return find_source_subtitle(subtitles, DEFAULT_SOURCE_LANGUAGES).get("path", "")
 
 
 def missing_enabled_targets(item: dict[str, Any], targets: list[dict[str, Any]]) -> list[dict[str, Any]]:

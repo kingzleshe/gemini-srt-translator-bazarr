@@ -54,12 +54,10 @@ else:
         "target_languages": [{"code": "zh", "language": "Simplified Chinese", "enabled": True}],
     }
 
-if isinstance(config, list):
-    sources = [{"code": "en", "language": "English", "enabled": True}]
-    targets = config
-else:
-    sources = config.get("source_languages") or [{"code": "en", "language": "English", "enabled": True}]
-    targets = config.get("target_languages") or [{"code": "zh", "language": "Simplified Chinese", "enabled": True}]
+if not isinstance(config, dict):
+    raise SystemExit("targets.json must contain source_languages and target_languages in an object")
+sources = config.get("source_languages") or [{"code": "en", "language": "English", "enabled": True}]
+targets = config.get("target_languages") or [{"code": "zh", "language": "Simplified Chinese", "enabled": True}]
 
 def enabled(items):
     for item in items:

@@ -9,10 +9,10 @@ from logging.handlers import RotatingFileHandler
 
 
 class LogTests(unittest.TestCase):
-    def test_snapshot_groups_tracebacks_and_accepts_legacy_timestamps(self):
+    def test_snapshot_groups_tracebacks_and_limits_events(self):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "worker.log").write_text(
-                "2026-09-07 12:00:00,123 INFO Legacy entry\n"
+                "2026-09-07T12:00:00Z INFO Earlier entry\n"
                 "2026-09-07T12:01:00Z ERROR Translation failed\n"
                 "Traceback (most recent call last):\n  example.py:12\nValueError: invalid subtitle\n",
                 encoding="utf-8",
@@ -22,7 +22,7 @@ class LogTests(unittest.TestCase):
             self.assertEqual(result["entries"][0]["level"], "ERROR")
             self.assertIn("ValueError: invalid subtitle", result["entries"][0]["details"])
             self.assertTrue(result["truncated"])
-            self.assertEqual(read_log_snapshot(tmp)["entries"][0]["message"], "Legacy entry")
+            self.assertEqual(read_log_snapshot(tmp)["entries"][0]["message"], "Earlier entry")
 
     def test_large_file_discards_partial_event_at_boundary(self):
         with tempfile.TemporaryDirectory() as tmp:
