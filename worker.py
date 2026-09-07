@@ -38,18 +38,13 @@ from gst_worker.logs import clear_logs, configure_logging, read_log_snapshot
 from gst_worker.http import HTTPClient, JsonFileCache, MemoryCache
 from gst_worker.queue import (
     JobQueue,
-    cancel_failed_job,
-    delete_queue_job,
-    enqueue_translation_jobs,
     queue_snapshot,
-    retry_failed_job,
     should_skip_job,
 )
 from gst_worker.console import ConsoleActions
 from gst_worker.translation_attempt import DEFAULT_ATTEMPT
 from gst_worker.subtitles import scan_source_subtitles
 from gst_worker.tmdb import build_tmdb_description
-from gst_worker.translation import run_translation
 
 
 def load_settings(config_path: str | None = None) -> dict[str, Any]:
