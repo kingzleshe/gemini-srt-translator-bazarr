@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from gst_worker.backups import (
+    BackupMaintenance,
     backup_file_path,
     create_backup,
     create_scheduled_backup_if_due,
