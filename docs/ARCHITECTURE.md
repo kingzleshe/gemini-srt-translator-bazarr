@@ -124,6 +124,10 @@ breaker prevents other work from consuming requests after daily quota exhaustion
 4. The worker executes `gst translate`.
 5. A Gemini `503` moves the job to `deferred` for 2, 5, then 15 minutes. After
    three delayed retries it moves to `failed`.
+   If the translator reports that its own consecutive-error or overload retry
+   limit was exhausted, the job instead fails immediately without queue retries.
+   This prevents nested retries from multiplying provider requests. The worker
+   log retains a redacted failure diagnostic even if the failed job is cancelled.
 6. A daily quota `429` moves the job and waiting jobs to `failed`, cancels
    automatic retries, and blocks admission and manual retries for 24 hours.
    Content line-count errors alone retry with the smaller batch size.

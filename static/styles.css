@@ -254,6 +254,15 @@ h1 {
   color: var(--accent);
 }
 
+.quota-notice {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  color: var(--warn);
+  line-height: 1.6;
+}
+
 .status-warn {
   color: var(--warn);
 }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -276,9 +277,25 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
         if result.returncode == 0:
             break
         result_output = _result_output(result)
-        failure = _format_gst_failure(result)
+        # Sanitize before retaining diagnostics in queue files or worker logs.
+        for key, value in translation_environment(settings).items():
+            if key.upper().endswith("API_KEY") or key.upper().endswith("API_KEY2"):
+                if value:
+                    result_output = result_output.replace(value, "[REDACTED]")
+        result_output = re.sub(r"AIza[A-Za-z0-9_-]+", "[REDACTED]", result_output)
+        # Format from sanitized output rather than leaking the original streams.
+        failure = f"gst failed with exit {result.returncode}: {result_output[-GST_OUTPUT_TAIL_LENGTH:]}"
         if _is_daily_quota_error(result_output):
             raise DailyQuotaExceededError(failure)
+        exhausted = (
+            "stopping script due to reaching" in result_output.lower()
+            and "consecutive errors" in result_output.lower()
+        ) or "model is still overloaded after" in result_output.lower()
+        if exhausted:
+            raise RuntimeError(
+                "Translation stopped at the upstream retry limit; automatic queue retries disabled. "
+                "Retry manually after checking the provider error or model settings. " + failure
+            )
         if _is_provider_unavailable(result_output):
             raise ProviderUnavailableError(failure)
         if (
@@ -291,7 +308,7 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
                 "gst returned invalid subtitle content with batch size %s; retrying with batch size %s. %s",
                 command_batch_size,
                 retry_batch_size,
-                _result_output_tail(result),
+                failure,
             )
             files.discard_untrusted_retry()
             command_settings = dict(settings)

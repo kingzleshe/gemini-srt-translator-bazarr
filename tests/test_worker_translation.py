@@ -170,7 +170,7 @@ class TestWorkerTranslationTests(unittest.TestCase):
             )()
 
             with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
-                with self.assertRaises(gst_translation.ProviderUnavailableError):
+                with self.assertRaisesRegex(RuntimeError, "upstream retry limit"):
                     gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),

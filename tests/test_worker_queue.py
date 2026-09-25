@@ -407,6 +407,10 @@ class TestWorkerQueueTests(unittest.TestCase):
             base = {"subtitle_path": str(source), "source_code": "en"}
             targets = [{"code": "zh", "language": "Chinese", "enabled": True}]
             with patch("gst_worker.queue.time.time", return_value=1000):
+                self.assertEqual(
+                    gst_queue.queue_snapshot(str(queue_dir))["daily_quota_pause"],
+                    {"retry_at": 2000},
+                )
                 with self.assertRaisesRegex(ValueError, "Daily Gemini quota"):
                     gst_queue.enqueue_translation_jobs(str(queue_dir), base, targets)
                 with self.assertRaisesRegex(ValueError, "Daily Gemini quota"):
@@ -414,6 +418,7 @@ class TestWorkerQueueTests(unittest.TestCase):
             self.assertTrue(failed.exists())
             self.assertEqual(list((queue_dir / "pending").glob("*.json")), [])
             with patch("gst_worker.queue.time.time", return_value=2001):
+                self.assertIsNone(gst_queue.queue_snapshot(str(queue_dir))["daily_quota_pause"])
                 self.assertEqual(len(gst_queue.enqueue_translation_jobs(str(queue_dir), base, targets)), 1)
                 self.assertTrue(gst_queue.retry_failed_job(str(queue_dir), "retry"))
 
@@ -519,7 +524,7 @@ class TestWorkerQueueTests(unittest.TestCase):
             )()
 
             with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
-                with self.assertRaises(gst_translation.ProviderUnavailableError):
+                with self.assertRaisesRegex(RuntimeError, "upstream retry limit"):
                     gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),
@@ -532,6 +537,28 @@ class TestWorkerQueueTests(unittest.TestCase):
                     )
 
             self.assertEqual(run.call_count, 1)
+
+    def test_exhausted_translator_retries_fail_without_queue_restarts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "Movie.en.srt"
+            source.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+            queue = gst_queue.JobQueue(str(root / "queue"))
+            job = {"subtitle_path": str(source), "target_code": "zh", "job_id": "exhausted"}
+            (queue.queue_dir / "pending" / "exhausted.json").write_text(json.dumps(job), encoding="utf-8")
+            result = type("Result", (), {"returncode": 130, "stdout":
+                "Stopping script due to reaching 3 consecutive errors to prevent API quota waste. "
+                "Last error: 503 UNAVAILABLE key=test-private-key", "stderr": ""})()
+            settings = {"gemini_api_key": "test-private-key"}
+            with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
+                with self.assertLogs(level="ERROR") as logs:
+                    queue.process_once(lambda job, update: gst_translation.run_translation(
+                        job, "", settings))
+                self.assertTrue((queue.queue_dir / "failed" / "exhausted.json").exists())
+                self.assertFalse(queue.process_once(lambda job, update: self.fail("Unexpected retry"), now=time.time() + 10000))
+            self.assertEqual(run.call_count, 1)
+            self.assertIn("503 UNAVAILABLE", "\n".join(logs.output))
+            self.assertNotIn("test-private-key", "\n".join(logs.output))
 
 
     def test_run_translation_does_not_retry_daily_quota_exhaustion(self):

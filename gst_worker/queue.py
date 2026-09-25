@@ -166,7 +166,11 @@ def enqueue_translation_jobs(
 def queue_snapshot(queue_dir: str, limit: int = 100) -> dict[str, Any]:
     ensure_queue_dirs(queue_dir)
     root = Path(queue_dir)
-    snapshot: dict[str, Any] = {"counts": {}, "total": 0}
+    pause_until = daily_quota_pause_until(queue_dir)
+    snapshot: dict[str, Any] = {
+        "counts": {}, "total": 0,
+        "daily_quota_pause": {"retry_at": pause_until} if pause_until is not None else None,
+    }
     for state in QUEUE_STATES:
         jobs: list[dict[str, Any]] = []
         files = sorted((root / state).glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)

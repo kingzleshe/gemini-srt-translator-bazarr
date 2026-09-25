@@ -413,8 +413,10 @@ class ConsoleHandler(BaseHTTPRequestHandler):
     def api_status(self) -> dict[str, Any]:
         settings = load_settings(self.ctx["config_path"])
         self.ctx["settings"] = settings
+        snapshot = queue_snapshot(self.ctx["queue_dir"])
         status = {
-            "queue": queue_snapshot(self.ctx["queue_dir"])["counts"],
+            "queue": snapshot["counts"],
+            "daily_quota_pause": snapshot["daily_quota_pause"],
             "settings": public_app_config(self.ctx["config_path"], settings),
             "bazarr_url": settings["bazarr_url"],
         }

@@ -39,6 +39,12 @@ Returns queue counts, current settings, Bazarr URL, and Bazarr ping status.
 
 Returns all queue states and counts.
 
+Both `/api/queue` and `/api/status` include `daily_quota_pause`: `null` when
+inactive, or `{"retry_at": 1790355039.786}` while paused (Unix seconds).
+The console shows the expiry in the browser's local time and explains that
+cancelling failed jobs does not lift the pause. Provider error details are not
+included in this field.
+
 ## GET /api/settings
 
 Returns current app settings. Configured secret fields are returned as

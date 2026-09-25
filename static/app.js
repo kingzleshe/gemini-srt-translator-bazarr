@@ -6,6 +6,7 @@ const state = {
   selectedTargets: [],
   scanItems: [],
   models: [],
+  quotaPause: null,
 };
 
 const SECRET_MASK = "**********";
@@ -77,6 +78,7 @@ async function loadModels() {
 
 async function loadStatus() {
   const status = await api("/api/status");
+  renderQuotaNotice(status.daily_quota_pause);
   const queue = status.queue || {};
   document.getElementById("metric-pending").textContent = queue.pending || 0;
   document.getElementById("metric-processing").textContent = queue.processing || 0;
@@ -86,6 +88,15 @@ async function loadStatus() {
   state.settings = status.settings;
   fillSettings(status.settings);
   renderDashboardLanguages();
+}
+
+function renderQuotaNotice(pause) {
+  state.quotaPause = pause;
+  const notice = document.getElementById("quota-notice");
+  const until = Number(pause?.retry_at) * 1000;
+  notice.hidden = !Number.isFinite(until) || until <= Date.now();
+  notice.textContent = notice.hidden ? "" :
+    `Gemini 每日配额已耗尽，暂时无法入队或重试。暂停解除时间：${new Date(until).toLocaleString(undefined, { timeZoneName: "short" })}（浏览器本地时间）。取消失败任务不会解除配额暂停。到期后请手动重新入队；翻译能否成功仍取决于 Gemini 实际可用配额。`;
 }
 
 function languageByCode(code) {
@@ -413,6 +424,7 @@ async function importBackup() {
 
 async function loadQueue() {
   const snapshot = await api("/api/queue");
+  renderQuotaNotice(snapshot.daily_quota_pause);
   const el = document.getElementById("queue-list");
   el.innerHTML = "";
   ["pending", "processing", "deferred", "done", "failed"].forEach((name) => {
@@ -685,6 +697,7 @@ document.getElementById("enqueue-scan").addEventListener("click", enqueueScan);
 // Keep the active queue useful without repeatedly refreshing settings or
 // querying Bazarr while the user is watching a translation.
 setInterval(() => {
+  renderQuotaNotice(state.quotaPause);
   if (state.view === "queue") loadQueue().catch((error) => toast(error.message));
   if (state.view === "logs" && document.getElementById("log-live").checked && !document.hidden) loadLogs();
 }, 5000);
