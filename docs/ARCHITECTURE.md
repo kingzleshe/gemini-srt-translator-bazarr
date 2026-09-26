@@ -79,6 +79,20 @@ need network access to enqueue work.
 `static/` contains a dependency-free HTML/CSS/JavaScript UI. It calls the local
 worker API only; it does not talk directly to Bazarr, Gemini, or TMDB.
 
+There is no build step: the browser loads native ES modules from `static/js/`,
+so the worker serves `.js` as `text/javascript` with `Cache-Control: no-cache`.
+
+- `index.html` holds the page shell and the static markup for every view.
+  Settings inputs are named after the `POST /api/settings` fields.
+- `js/main.js` owns hash routing (`#queue/failed`), the shared five-second poll,
+  sidebar badges and health, the quota banner, and the theme toggle.
+- `js/store.js` caches `/api/queue`, `/api/status`, languages, and models, and
+  notifies subscribers so one poll updates every visible part of the page.
+- `js/views/*.js` export one object per view with `title`, `subtitle`, and
+  optional `init()`, `enter(param)`, `leave()`, and `tick()` hooks.
+- `js/ui.js` builds DOM through text nodes only; paths and provider errors are
+  untrusted and must never be written as HTML.
+
 ## Queue Layout
 
 The queue is a set of JSON files in five directories:

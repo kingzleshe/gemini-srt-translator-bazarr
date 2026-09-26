@@ -213,6 +213,14 @@ def run_backup_scheduler(state_dir: str, config_path: str, postprocess_targets_p
         time.sleep(sleep_seconds)
 
 
+STATIC_CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".svg": "image/svg+xml",
+}
+
+
 class ConsoleHandler(BaseHTTPRequestHandler):
     server_version = "GeminiSRTConsole/1.0"
 
@@ -435,11 +443,14 @@ class ConsoleHandler(BaseHTTPRequestHandler):
         path = (static_dir / rel).resolve()
         if not str(path).startswith(str(static_dir.resolve())) or not path.exists() or not path.is_file():
             path = static_dir / "index.html"
-        content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+        # Module scripts require a JavaScript MIME type; the Windows registry can
+        # map .js to text/plain, so the console's own asset types are fixed here.
+        content_type = STATIC_CONTENT_TYPES.get(path.suffix.lower()) or mimetypes.guess_type(str(path))[0] or "application/octet-stream"
         body = path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
 

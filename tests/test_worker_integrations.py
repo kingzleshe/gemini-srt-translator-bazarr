@@ -134,6 +134,27 @@ class TestWorkerIntegrationsTests(unittest.TestCase):
         self.assertEqual(captured.output, ["INFO:root:web 127.0.0.1 - code 400, message Bad request syntax"])
 
 
+    def test_console_serves_module_scripts_as_javascript_without_caching(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "js").mkdir()
+            (Path(tmp) / "js" / "main.js").write_text("export {};", encoding="utf-8")
+            handler = object.__new__(worker.ConsoleHandler)
+            handler.server = type("Server", (), {"ctx": {"static_dir": tmp}})()
+            handler.wfile = io.BytesIO()
+            headers: dict[str, str] = {}
+            handler.send_response = lambda status: headers.setdefault("status", str(status))
+            handler.send_header = lambda key, value: headers.__setitem__(key, value)
+            handler.end_headers = lambda: None
+
+            # Windows registries can map .js to text/plain; module scripts would then fail to load.
+            with patch("worker.mimetypes.guess_type", return_value=("text/plain", None)):
+                handler.serve_static("/js/main.js")
+
+        self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(headers["Cache-Control"], "no-cache")
+        self.assertEqual(handler.wfile.getvalue(), b"export {};")
+
+
     def test_scan_source_subtitles_finds_missing_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
