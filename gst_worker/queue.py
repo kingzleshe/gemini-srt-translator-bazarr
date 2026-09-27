@@ -12,7 +12,7 @@ from .config import enabled_target_languages
 from .subtitles import target_output_path
 from .translation import DailyQuotaExceededError, ProviderUnavailableError
 from .translation_attempt import DEFAULT_ATTEMPT
-from .queue_policy import PROVIDER_RETRY_DELAYS, daily_quota_retry_at, provider_retry_decision
+from .queue_policy import PROVIDER_RETRY_DELAYS, daily_quota_retry_at, provider_retry_decision, select_model
 
 
 QUEUE_STATES = ("pending", "processing", "deferred", "done", "failed")
@@ -35,19 +35,43 @@ def _move_job(source: Path, destination: Path, error: str | None = None) -> None
 
 
 def _reset_retry(job: dict[str, Any]) -> None:
-    for key in ("provider_retry_count", "retry_at", "deferred_reason", "last_error"):
+    for key in ("provider_retry_count", "retry_at", "deferred_reason", "last_error", "use_fallback_model"):
         job.pop(key, None)
 
 
-def daily_quota_pause_until(queue_dir: str, now: float | None = None) -> float | None:
+def _read_provider_pause(queue_dir: str) -> dict[str, Any]:
     try:
         pause = json.loads((Path(queue_dir) / "provider-pause.json").read_text(encoding="utf-8"))
-        retry_at = float(pause.get("retry_at") or 0) if isinstance(pause, dict) else 0
-        if isinstance(pause, dict) and pause.get("reason") == "daily-quota" and retry_at > (time.time() if now is None else now):
-            return retry_at
     except (OSError, TypeError, ValueError):
-        pass
+        return {}
+    return pause if isinstance(pause, dict) else {}
+
+
+def daily_quota_pause_until(queue_dir: str, now: float | None = None) -> float | None:
+    """The global pause: every configured model has exhausted its daily quota."""
+    pause = _read_provider_pause(queue_dir)
+    try:
+        retry_at = float(pause.get("retry_at") or 0)
+    except (TypeError, ValueError):
+        return None
+    if pause.get("reason") == "daily-quota" and retry_at > (time.time() if now is None else now):
+        return retry_at
     return None
+
+
+def model_quota_pauses(queue_dir: str, now: float | None = None) -> dict[str, float]:
+    """Models whose own daily quota is exhausted, mapped to when each may be used again."""
+    current_time = time.time() if now is None else now
+    models = _read_provider_pause(queue_dir).get("models")
+    paused: dict[str, float] = {}
+    if isinstance(models, dict):
+        for model, retry_at in models.items():
+            try:
+                if float(retry_at) > current_time:
+                    paused[str(model)] = float(retry_at)
+            except (TypeError, ValueError):
+                continue
+    return paused
 
 
 def reject_daily_quota(queue_dir: str) -> None:
@@ -249,12 +273,31 @@ class JobQueue:
                 continue
             _move_job(deferred_path, pending_path)
 
+    def _provider_hold_active(self, now: float) -> bool:
+        """While one job waits out a Gemini outage, others would only spend quota on the same errors."""
+        for deferred_path in (self.queue_dir / "deferred").glob("*.json"):
+            try:
+                job = json.loads(deferred_path.read_text(encoding="utf-8"))
+                if job.get("deferred_reason") == "provider-unavailable" and float(job.get("retry_at") or 0) > now:
+                    return True
+            except (OSError, TypeError, ValueError):
+                continue
+        return False
+
+    def _record_model_quota_pause(self, model: str, retry_at: float, now: float) -> dict[str, float]:
+        paused = model_quota_pauses(str(self.queue_dir), now)
+        paused[model] = retry_at
+        _write_job(self.queue_dir / "provider-pause.json", {"models": paused})
+        return paused
+
     def _ready_job_path(self, settle_seconds: int, now: float | None = None) -> Path | None:
         current_time = time.time() if now is None else now
         if daily_quota_pause_until(str(self.queue_dir), current_time) is not None:
             self._fail_waiting_quota_jobs()
             return None
         self._promote_deferred_jobs(current_time)
+        if self._provider_hold_active(current_time):
+            return None
         settle_seconds = max(0, settle_seconds)
         jobs = sorted((self.queue_dir / "pending").glob("*.json"), key=lambda path: path.stat().st_mtime)
         for job_path in jobs:
@@ -279,7 +322,9 @@ class JobQueue:
         *,
         settle_seconds: int = 0,
         now: float | None = None,
+        models: tuple[str, ...] = (),
     ) -> bool:
+        """Run one ready job; `models` is the primary model then an optional fallback."""
         current_time = time.time() if now is None else now
         job_path = self._ready_job_path(settle_seconds, now=current_time)
         if job_path is None:
@@ -295,6 +340,14 @@ class JobQueue:
         error = None
         try:
             job = json.loads(processing_path.read_text(encoding="utf-8"))
+            model = select_model(
+                models,
+                model_quota_pauses(str(self.queue_dir), current_time),
+                prefer_fallback=bool(job.get("use_fallback_model")),
+            )
+            if model:
+                job["gst_model"] = model
+
             def update_status(stage: str) -> None:
                 job["started_at"] = float(job.get("started_at") or time.time())
                 job["updated_at"] = time.time()
@@ -317,18 +370,46 @@ class JobQueue:
             job.pop("deferred_reason", None)
             job["last_error"] = str(exc)
             _write_job(processing_path, job)
-            destination = self.queue_dir / "failed" / processing_path.name
-            error = str(exc)
-            _write_job(
-                self.queue_dir / "provider-pause.json",
-                {"retry_at": retry_at, "reason": "daily-quota", "error": str(exc)},
-            )
-            self._fail_waiting_quota_jobs()
-            logging.warning("Job %s stopped: daily Gemini quota exhausted. New jobs blocked until %s; waiting jobs marked failed.",
-                            processing_path.stem, datetime.fromtimestamp(retry_at, timezone.utc).isoformat())
+            model = str(job.get("gst_model") or "")
+            paused = self._record_model_quota_pause(model, retry_at, failure_time) if model and models else {}
+            remaining = [candidate for candidate in models if candidate not in paused]
+            if paused and remaining:
+                # Quota is per model: keep the checkpoint and continue on a model that still has quota.
+                destination = self.queue_dir / "pending" / processing_path.name
+                logging.warning("Job %s: daily Gemini quota exhausted for %s until %s; continuing on %s.",
+                                processing_path.stem, model,
+                                datetime.fromtimestamp(retry_at, timezone.utc).isoformat(), remaining[0])
+            else:
+                if paused:
+                    retry_at = min(paused[candidate] for candidate in models)
+                destination = self.queue_dir / "failed" / processing_path.name
+                error = str(exc)
+                _write_job(
+                    self.queue_dir / "provider-pause.json",
+                    {"retry_at": retry_at, "reason": "daily-quota", "error": str(exc), "models": paused},
+                )
+                self._fail_waiting_quota_jobs()
+                logging.warning("Job %s stopped: daily Gemini quota exhausted. New jobs blocked until %s; waiting jobs marked failed.",
+                                processing_path.stem, datetime.fromtimestamp(retry_at, timezone.utc).isoformat())
         except ProviderUnavailableError as exc:
-            decision = provider_retry_decision(int(job.get("provider_retry_count") or 0), time.time())
-            if decision.state == "deferred":
+            fallback_available = (
+                len(models) > 1
+                and job.get("gst_model") != models[1]
+                and models[1] not in model_quota_pauses(str(self.queue_dir))
+            )
+            decision = provider_retry_decision(int(job.get("provider_retry_count") or 0), time.time(), fallback_available)
+            if decision.state == "fallback":
+                job.pop("retry_at", None)
+                job.pop("deferred_reason", None)
+                job["use_fallback_model"] = True
+                job["last_error"] = str(exc)
+                _write_job(processing_path, job)
+                destination = self.queue_dir / "pending" / processing_path.name
+                logging.warning(
+                    "Gemini %s remained unavailable after %s delayed retries; job %s continues on fallback model %s",
+                    job.get("gst_model"), len(PROVIDER_RETRY_DELAYS), processing_path.name, models[1],
+                )
+            elif decision.state == "deferred":
                 retry_count = decision.retry_count or 0
                 failure_time = time.time()
                 retry_at = decision.retry_at or failure_time

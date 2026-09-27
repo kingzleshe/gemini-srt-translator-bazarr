@@ -231,6 +231,7 @@ class TestWorkerQueueTests(unittest.TestCase):
                         "retry_at": 1_234,
                         "deferred_reason": "provider-unavailable",
                         "last_error": "503 UNAVAILABLE",
+                        "use_fallback_model": True,
                     }
                 ),
                 encoding="utf-8",
@@ -244,6 +245,7 @@ class TestWorkerQueueTests(unittest.TestCase):
             self.assertNotIn("retry_at", pending)
             self.assertNotIn("deferred_reason", pending)
             self.assertNotIn("last_error", pending)
+            self.assertNotIn("use_fallback_model", pending)
             self.assertFalse((queue_dir / "pending" / "retry-me.error").exists())
 
 
@@ -342,11 +344,11 @@ class TestWorkerQueueTests(unittest.TestCase):
                 deferred_path = queue_dir / "deferred" / "overloaded.json"
                 self.assertTrue(deferred_path.exists())
                 deferred = json.loads(deferred_path.read_text(encoding="utf-8"))
-                self.assertEqual(deferred["retry_at"], 1_420)
+                self.assertEqual(deferred["retry_at"], 1_600)
                 self.assertEqual(deferred["provider_retry_count"], 1)
 
-                self.assertFalse(queue_worker.process_once(now=1_419))
-                self.assertTrue(queue_worker.process_once(now=1_420))
+                self.assertFalse(queue_worker.process_once(now=1_599))
+                self.assertTrue(queue_worker.process_once(now=1_600))
 
             self.assertEqual(process_job.call_count, 2)
             self.assertTrue((queue_dir / "done" / "overloaded.json").exists())
@@ -472,7 +474,7 @@ class TestWorkerQueueTests(unittest.TestCase):
             self.assertEqual(len(list((queue_dir / "failed").glob("*.json"))), 2)
 
 
-    def test_queue_worker_fails_503_after_three_delayed_retries(self):
+    def test_queue_worker_fails_503_after_four_delayed_retries_without_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
             queue_dir = Path(tmp) / "queue"
             gst_queue.ensure_queue_dirs(str(queue_dir))
@@ -483,7 +485,7 @@ class TestWorkerQueueTests(unittest.TestCase):
                 "output_path": str(Path(tmp) / "Movie.zh.srt"),
                 "source_code": "en",
                 "target_code": "zh",
-                "provider_retry_count": 3,
+                "provider_retry_count": 4,
             }
             pending_path = queue_dir / "pending" / "still-overloaded.json"
             pending_path.write_text(json.dumps(job), encoding="utf-8")
@@ -504,7 +506,7 @@ class TestWorkerQueueTests(unittest.TestCase):
             self.assertFalse((queue_dir / "deferred" / "still-overloaded.json").exists())
 
 
-    def test_run_translation_does_not_immediately_retry_gemini_503(self):
+    def test_run_translation_defers_gemini_503_that_outlasts_translator_retries(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             subtitle = root / "Movie.en.srt"
@@ -524,7 +526,7 @@ class TestWorkerQueueTests(unittest.TestCase):
             )()
 
             with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
-                with self.assertRaisesRegex(RuntimeError, "upstream retry limit"):
+                with self.assertRaises(gst_translation.ProviderUnavailableError):
                     gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),
@@ -548,7 +550,7 @@ class TestWorkerQueueTests(unittest.TestCase):
             (queue.queue_dir / "pending" / "exhausted.json").write_text(json.dumps(job), encoding="utf-8")
             result = type("Result", (), {"returncode": 130, "stdout":
                 "Stopping script due to reaching 3 consecutive errors to prevent API quota waste. "
-                "Last error: 503 UNAVAILABLE key=test-private-key", "stderr": ""})()
+                "Last error: Expected 300 lines, got 307. key=test-private-key", "stderr": ""})()
             settings = {"gemini_api_key": "test-private-key"}
             with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
                 with self.assertLogs(level="ERROR") as logs:
@@ -557,7 +559,7 @@ class TestWorkerQueueTests(unittest.TestCase):
                 self.assertTrue((queue.queue_dir / "failed" / "exhausted.json").exists())
                 self.assertFalse(queue.process_once(lambda job, update: self.fail("Unexpected retry"), now=time.time() + 10000))
             self.assertEqual(run.call_count, 1)
-            self.assertIn("503 UNAVAILABLE", "\n".join(logs.output))
+            self.assertIn("Expected 300 lines, got 307", "\n".join(logs.output))
             self.assertNotIn("test-private-key", "\n".join(logs.output))
 
 

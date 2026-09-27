@@ -10,9 +10,10 @@ from gst_worker.translation_attempt import TranslationAttempt
 
 class QueuePolicyTests(unittest.TestCase):
     def test_provider_retry_policy_is_pure_and_bounded(self):
-        self.assertEqual(provider_retry_decision(0, 1000).retry_at, 1120)
-        self.assertEqual(provider_retry_decision(2, 1000).retry_count, 3)
-        self.assertEqual(provider_retry_decision(3, 1000).state, "failed")
+        self.assertEqual(provider_retry_decision(0, 1000).retry_at, 1300)
+        self.assertEqual(provider_retry_decision(3, 1000).retry_count, 4)
+        self.assertEqual(provider_retry_decision(4, 1000).state, "failed")
+        self.assertEqual(provider_retry_decision(4, 1000, fallback_available=True).state, "fallback")
 
     def test_daily_quota_pause_is_24_hours(self):
         self.assertEqual(daily_quota_retry_at(1000), 87400)

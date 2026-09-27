@@ -43,6 +43,7 @@ from gst_worker.queue import (
     should_skip_job,
 )
 from gst_worker.console import ConsoleActions
+from gst_worker.queue_policy import configured_models
 from gst_worker.translation_attempt import DEFAULT_ATTEMPT
 from gst_worker.subtitles import scan_source_subtitles
 from gst_worker.runtime import RuntimeContext
@@ -150,6 +151,9 @@ def process_job(
     )
     if status_callback:
         status_callback("Sending subtitle batches to Gemini")
+    # The queue picks primary or fallback per attempt; the configured model is the default.
+    if job.get("gst_model"):
+        settings = {**settings, "gst_model": str(job["gst_model"])}
     status = DEFAULT_ATTEMPT.run(job, description, settings)
     if status_callback:
         status_callback("Refreshing Bazarr")
@@ -173,6 +177,9 @@ class QueueWorker:
             lambda job, update_status: process_job(job, self.settings, self.cache, self.http, update_status),
             settle_seconds=max(0, int(self.settings.get("job_settle_seconds") or 0)),
             now=now,
+            models=configured_models(
+                str(self.settings.get("gst_model") or ""), str(self.settings.get("gst_fallback_model") or "")
+            ),
         )
 
     def run_forever(self, sleep_seconds: int) -> None:

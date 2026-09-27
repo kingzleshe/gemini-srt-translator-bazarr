@@ -254,6 +254,11 @@
               <label for="f-gst_model">Model</label>
               <select id="f-gst_model" name="gst_model" class="input"></select>
             </div>
+            <div class="field field-wide">
+              <label for="f-gst_fallback_model">Fallback model</label>
+              <select id="f-gst_fallback_model" name="gst_fallback_model" class="input"></select>
+              <p class="hint">Continues a job when the model above stays unavailable through every delayed retry or runs out of daily quota.</p>
+            </div>
             <div class="field">
               <label for="f-gst_batch_size">Batch size</label>
               <input id="f-gst_batch_size" name="gst_batch_size" class="input" type="number" min="1" max="10000" data-type="int" data-default="500">

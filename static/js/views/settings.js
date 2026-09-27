@@ -32,7 +32,7 @@ function readForm() {
 }
 
 function fillForm(settings) {
-  renderModelOptions(settings.gst_model);
+  renderModelOptions(settings.gst_model, settings.gst_fallback_model);
   for (const input of form.elements) {
     if (!input.name || !(input.name in settings)) continue;
     const value = settings[input.name];
@@ -56,13 +56,26 @@ function fillForm(settings) {
   setDirty(false);
 }
 
-function renderModelOptions(current) {
+function renderModelOptions(current, currentFallback) {
   const select = form.elements.gst_model;
   const value = current || select.value || DEFAULT_MODEL;
   const models = [...(store.models || [])];
   if (!models.some((model) => model.id === value)) models.unshift({ id: value, name: value });
   select.replaceChildren(...models.map((model) => h("option", { value: model.id, text: model.name })));
   select.value = value;
+
+  // An empty fallback disables it; keep a saved fallback even if it is no longer listed.
+  const fallback = form.elements.gst_fallback_model;
+  const fallbackValue = currentFallback ?? fallback.value;
+  const fallbackModels = [...(store.models || [])];
+  if (fallbackValue && !fallbackModels.some((model) => model.id === fallbackValue)) {
+    fallbackModels.unshift({ id: fallbackValue, name: fallbackValue });
+  }
+  fallback.replaceChildren(
+    h("option", { value: "", text: "None" }),
+    ...fallbackModels.map((model) => h("option", { value: model.id, text: model.name })),
+  );
+  fallback.value = fallbackValue || "";
 }
 
 function renderLanguages(kind) {

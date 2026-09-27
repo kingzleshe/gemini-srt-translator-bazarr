@@ -108,8 +108,10 @@ queue/
 
 A job file is moved between directories as state changes. Deferred and failed
 jobs may also have a sibling `.error` file containing the exception text.
-Deferred jobs record `retry_at`; a persisted `provider-pause.json` circuit
-breaker prevents other work from consuming requests after daily quota exhaustion.
+Deferred jobs record `retry_at`. `provider-pause.json` records which models have
+exhausted their daily quota (`models`, model name to expiry) and, once every
+configured model has, the global circuit breaker (`reason`, `retry_at`) that
+prevents other work from consuming requests.
 
 ## Job Shape
 
@@ -130,20 +132,34 @@ breaker prevents other work from consuming requests after daily quota exhaustion
 }
 ```
 
+The queue adds runtime fields: `gst_model` is the model chosen for the latest
+translation attempt, and `use_fallback_model` marks a job handed to the fallback
+model after a provider outage. A manual retry clears the retry fields.
+
 ## Translation Flow
 
 1. The worker picks the oldest pending job.
 2. Existing output files are skipped to avoid overwriting subtitles.
 3. TMDB context is built when `TMDB_API_KEY` is available.
-4. The worker executes `gst translate`.
-5. A Gemini `503` moves the job to `deferred` for 2, 5, then 15 minutes. After
-   three delayed retries it moves to `failed`.
-   If the translator reports that its own consecutive-error or overload retry
-   limit was exhausted, the job instead fails immediately without queue retries.
-   This prevents nested retries from multiplying provider requests. The worker
-   log retains a redacted failure diagnostic even if the failed job is cancelled.
-6. A daily quota `429` moves the job and waiting jobs to `failed`, cancels
-   automatic retries, and blocks admission and manual retries for 24 hours.
+4. The worker executes `gst translate` with the model the queue chose for this
+   attempt: the primary `gst_model`, or `gst_fallback_model` when the job was
+   handed over or the primary model's daily quota is exhausted.
+5. A Gemini `503` moves the job to `deferred` for 5, 15, 30, then 60 minutes.
+   This includes `gst` stopping at its own consecutive-error limit when the last
+   error was a `503`, because an outage outlasts its short internal retries.
+   While a job waits out an outage, no other job starts, so a queue of jobs does
+   not spend daily quota on the same errors. After four delayed retries the job
+   moves to the fallback model once, resuming from its checkpoint; without a
+   fallback, or when the fallback is also unavailable, it moves to `failed`.
+   If `gst` stops at its retry limit on any other last error, such as invalid
+   content, the job fails immediately without queue retries so nested retries do
+   not multiply provider requests. The worker log retains a redacted failure
+   diagnostic even if the failed job is cancelled.
+6. A daily quota `429` pauses that model for 24 hours. If another configured
+   model still has quota, the job returns to `pending` and continues on it.
+   Once every configured model is exhausted, the job and waiting jobs move to
+   `failed`, automatic retries are cancelled, and admission and manual retries
+   are blocked until the first model's pause expires.
    Content line-count errors alone retry with the smaller batch size.
 7. On success, the job moves to `done`.
 8. The worker refreshes Bazarr with `scan-disk`; if item IDs are missing, it

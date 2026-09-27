@@ -32,7 +32,7 @@ class QueueLifecycleTests(unittest.TestCase):
         job_id = self.enqueue()
         execute = Mock(side_effect=translation.ProviderUnavailableError("503 unavailable"))
         now = 1000
-        for retry_count, delay in enumerate((120, 300, 900), 1):
+        for retry_count, delay in enumerate((300, 900, 1800, 3600), 1):
             with patch("gst_worker.queue.time.time", return_value=now):
                 self.assertTrue(self.jobs.process_once(execute, now=now))
             deferred = self.snapshot()["deferred"][0]
@@ -44,7 +44,7 @@ class QueueLifecycleTests(unittest.TestCase):
 
         self.assertTrue(self.jobs.process_once(execute, now=now))
         self.assertEqual(self.snapshot()["counts"]["failed"], 1)
-        self.assertEqual(execute.call_count, 4)
+        self.assertEqual(execute.call_count, 5)
         self.assertTrue(queue.retry_failed_job(self.queue_dir, job_id))
         pending = self.snapshot()["pending"][0]
         for field in ("provider_retry_count", "retry_at", "deferred_reason", "last_error"):
