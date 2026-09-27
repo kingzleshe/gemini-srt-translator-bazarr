@@ -21,8 +21,15 @@ A recorded position in subtitle translation progress. A checkpoint alone does
 not establish that unfinished subtitle output is available for resuming.
 
 **Daily quota pause**:
-The period after daily Gemini quota exhaustion during which new translation jobs
-and retries are blocked; waiting jobs are failed rather than automatically resumed.
+The period after every configured model has exhausted its daily Gemini quota
+during which new translation jobs and retries are blocked; waiting jobs are
+failed rather than automatically resumed. Exhausting only one model's quota
+pauses that model alone.
+
+**Fallback model**:
+An optional second Gemini model that continues a translation job from its
+checkpoint when the primary model stays unavailable through every delayed retry
+or has exhausted its own daily quota.
 
 **Queue lifecycle**:
 The rules that move a translation job through the job queue, including settling,

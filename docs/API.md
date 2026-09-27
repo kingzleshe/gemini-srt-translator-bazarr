@@ -97,6 +97,7 @@ current stored key.
   "gemini_api_key2": "",
   "tmdb_api_key": "",
   "gst_model": "gemini-flash-latest",
+  "gst_fallback_model": "",
   "gst_batch_size": 500,
   "gst_retry_batch_size": 300,
   "gst_paid_quota": false,

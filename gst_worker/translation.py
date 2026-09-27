@@ -141,6 +141,12 @@ def _is_provider_unavailable(output: str) -> bool:
     )
 
 
+def _last_gst_error(output: str) -> str:
+    """Return the error gst stopped on, not earlier errors it recovered from."""
+    index = output.lower().rfind("last error:")
+    return output[index:] if index >= 0 else output
+
+
 def _is_content_retry_error(output: str) -> bool:
     lowered = output.lower()
     return (
@@ -287,11 +293,16 @@ def run_translation(job: dict[str, Any], description: str, settings: dict[str, A
         failure = f"gst failed with exit {result.returncode}: {result_output[-GST_OUTPUT_TAIL_LENGTH:]}"
         if _is_daily_quota_error(result_output):
             raise DailyQuotaExceededError(failure)
-        exhausted = (
+        overload_exhausted = "model is still overloaded after" in result_output.lower()
+        exhausted = overload_exhausted or (
             "stopping script due to reaching" in result_output.lower()
             and "consecutive errors" in result_output.lower()
-        ) or "model is still overloaded after" in result_output.lower()
+        )
         if exhausted:
+            # An outage outlasts gst's short internal retries; the queue backs off instead.
+            # Any other last error (for example invalid content) still fails immediately.
+            if overload_exhausted or _is_provider_unavailable(_last_gst_error(result_output)):
+                raise ProviderUnavailableError(failure)
             raise RuntimeError(
                 "Translation stopped at the upstream retry limit; automatic queue retries disabled. "
                 "Retry manually after checking the provider error or model settings. " + failure

@@ -64,13 +64,14 @@ class FrontendStructureTests(unittest.TestCase):
 
         self.assertEqual(names, {
             "bazarr_url", "bazarr_api_key", "gemini_api_key", "gemini_api_key2", "tmdb_api_key",
-            "gst_model", "gst_batch_size", "gst_retry_batch_size", "job_settle_seconds",
+            "gst_model", "gst_fallback_model", "gst_batch_size", "gst_retry_batch_size", "job_settle_seconds",
             "gst_paid_quota", "gst_skip_upgrade", "gst_quiet", "gst_progress_log", "gst_thoughts_log",
             "gst_token_report", "gst_temperature", "gst_top_p", "gst_top_k", "gst_context_size",
             "gst_thinking_budget", "gst_thinking_level", "gst_no_streaming", "gst_no_thinking",
             "media_roots", "scan_limit",
         })
         self.assertIn('<select id="f-gst_model" name="gst_model"', settings)
+        self.assertIn('<select id="f-gst_fallback_model" name="gst_fallback_model"', settings)
         self.assertIn("Token report", settings)
         self.assertNotIn("gst_token_stats", settings + read_scripts())
         self.assertNotIn("gst_resume_fallback_batch_size", settings)

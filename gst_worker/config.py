@@ -36,6 +36,7 @@ GST_BOOL_CONFIG_KEYS = (
 )
 GST_STRING_CONFIG_KEYS = (
     "gst_model",
+    "gst_fallback_model",
     "gst_temperature",
     "gst_top_p",
     "gst_top_k",
@@ -53,6 +54,7 @@ DEFAULT_APP_CONFIG = {
     "gemini_api_key2": "",
     "tmdb_api_key": "",
     "gst_model": "gemini-flash-latest",
+    "gst_fallback_model": "",
     "gst_batch_size": 500,
     "gst_retry_batch_size": 300,
     "gst_paid_quota": False,
@@ -123,6 +125,8 @@ def normalize_app_config(config: dict[str, Any]) -> dict[str, Any]:
         normalized[key] = str(normalized.get(key) or "").strip()
     if not normalized["gst_model"]:
         normalized["gst_model"] = str(DEFAULT_APP_CONFIG["gst_model"])
+    if normalized["gst_fallback_model"] == normalized["gst_model"]:
+        normalized["gst_fallback_model"] = ""
     if normalized["gst_thinking_level"] not in {"", "minimal", "low", "medium", "high"}:
         normalized["gst_thinking_level"] = ""
     for key in GST_BOOL_CONFIG_KEYS:

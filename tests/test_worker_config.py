@@ -210,6 +210,7 @@ class TestWorkerConfigTests(unittest.TestCase):
                 str(config_path),
                 {
                     "gst_model": "gemini-2.5-flash",
+                    "gst_fallback_model": " gemini-3.5-flash-lite ",
                     "gst_batch_size": 500,
                     "gst_retry_batch_size": 250,
                     "gst_resume_fallback_batch_size": 50,
@@ -233,6 +234,7 @@ class TestWorkerConfigTests(unittest.TestCase):
             )
 
             self.assertEqual(saved["gst_model"], "gemini-2.5-flash")
+            self.assertEqual(saved["gst_fallback_model"], "gemini-3.5-flash-lite")
             self.assertEqual(saved["gst_batch_size"], 500)
             self.assertEqual(saved["gst_retry_batch_size"], 250)
             self.assertNotIn("gst_resume_fallback_batch_size", saved)
@@ -254,10 +256,17 @@ class TestWorkerConfigTests(unittest.TestCase):
             self.assertEqual(saved["job_settle_seconds"], 600)
 
 
+    def test_fallback_model_equal_to_primary_is_disabled(self):
+        config = gst_config.normalize_app_config({"gst_model": "gemini-3.8-flash", "gst_fallback_model": "gemini-3.8-flash"})
+
+        self.assertEqual(config["gst_fallback_model"], "")
+
+
     def test_default_gst_tuning_matches_recommended_automation_profile(self):
         config = gst_config.normalize_app_config({"gst_no_context": True})
 
         self.assertEqual(config["gst_model"], "gemini-flash-latest")
+        self.assertEqual(config["gst_fallback_model"], "")
         self.assertEqual(config["gst_batch_size"], 500)
         self.assertEqual(config["gst_retry_batch_size"], 300)
         self.assertNotIn("gst_resume_fallback_batch_size", config)

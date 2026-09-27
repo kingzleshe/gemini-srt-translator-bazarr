@@ -150,7 +150,7 @@ class TestWorkerTranslationTests(unittest.TestCase):
             self.assertEqual(commands[1][commands[1].index("--batch-size") + 1], "500")
 
 
-    def test_run_translation_does_not_immediately_retry_gemini_503(self):
+    def test_run_translation_defers_gemini_503_that_outlasts_translator_retries(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             subtitle = root / "Movie.en.srt"
@@ -170,7 +170,7 @@ class TestWorkerTranslationTests(unittest.TestCase):
             )()
 
             with patch("gst_worker.translation.subprocess.run", return_value=result) as run:
-                with self.assertRaisesRegex(RuntimeError, "upstream retry limit"):
+                with self.assertRaises(gst_translation.ProviderUnavailableError):
                     gst_translation.run_translation(
                         {
                             "subtitle_path": str(subtitle),

@@ -121,6 +121,7 @@ Default:
   "gemini_api_key2": "",
   "tmdb_api_key": "",
   "gst_model": "gemini-flash-latest",
+  "gst_fallback_model": "",
   "gst_batch_size": 500,
   "gst_retry_batch_size": 300,
   "gst_paid_quota": false,
@@ -160,6 +161,11 @@ keeps the existing secret.
 The Settings page writes these `gst translate` options into app config:
 
 - `gst_model`: selected from `/api/gemini-models`; passed to `--model`.
+- `gst_fallback_model`: optional second model, empty by default. A job moves to
+  it after the primary model stays unavailable (`503`) through every delayed
+  retry, or when the primary model's daily quota is exhausted; each Gemini model
+  has its own daily quota. The job resumes from its checkpoint. A value equal to
+  `gst_model` is stored as empty.
 - `gst_batch_size`: passed to `--batch-size`.
 - `gst_retry_batch_size`: used only when `gst` reports invalid subtitle content,
   such as an output line-count mismatch. Provider `429` and `503` errors never
