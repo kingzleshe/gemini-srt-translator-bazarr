@@ -74,6 +74,26 @@ def model_quota_pauses(queue_dir: str, now: float | None = None) -> dict[str, fl
     return paused
 
 
+def sync_daily_quota_pause(queue_dir: str, models: tuple[str, ...], now: float | None = None) -> float | None:
+    """Re-derive the global pause from per-model pauses for the models configured now.
+
+    Switching to a model that still has quota lifts the pause; the pause file is
+    rewritten so the Bazarr enqueue script sees the same admission decision.
+    """
+    current_time = time.time() if now is None else now
+    pause = _read_provider_pause(queue_dir)
+    if not models or not isinstance(pause.get("models"), dict):
+        return daily_quota_pause_until(queue_dir, current_time)
+    paused = model_quota_pauses(queue_dir, current_time)
+    if all(model in paused for model in models):
+        updated = {**pause, "retry_at": min(paused[model] for model in models), "reason": "daily-quota", "models": paused}
+    else:
+        updated = {"models": paused}
+    if updated != pause:
+        _write_job(Path(queue_dir) / "provider-pause.json", updated)
+    return daily_quota_pause_until(queue_dir, current_time)
+
+
 def reject_daily_quota(queue_dir: str) -> None:
     if daily_quota_pause_until(queue_dir) is not None:
         raise ValueError("Daily Gemini quota exhausted; new jobs and retries are disabled until the quota pause expires.")
@@ -290,9 +310,9 @@ class JobQueue:
         _write_job(self.queue_dir / "provider-pause.json", {"models": paused})
         return paused
 
-    def _ready_job_path(self, settle_seconds: int, now: float | None = None) -> Path | None:
+    def _ready_job_path(self, settle_seconds: int, now: float | None = None, models: tuple[str, ...] = ()) -> Path | None:
         current_time = time.time() if now is None else now
-        if daily_quota_pause_until(str(self.queue_dir), current_time) is not None:
+        if sync_daily_quota_pause(str(self.queue_dir), models, current_time) is not None:
             self._fail_waiting_quota_jobs()
             return None
         self._promote_deferred_jobs(current_time)
@@ -326,7 +346,7 @@ class JobQueue:
     ) -> bool:
         """Run one ready job; `models` is the primary model then an optional fallback."""
         current_time = time.time() if now is None else now
-        job_path = self._ready_job_path(settle_seconds, now=current_time)
+        job_path = self._ready_job_path(settle_seconds, now=current_time, models=models)
         if job_path is None:
             return False
 

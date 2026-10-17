@@ -41,6 +41,7 @@ from gst_worker.queue import (
     JobQueue,
     queue_snapshot,
     should_skip_job,
+    sync_daily_quota_pause,
 )
 from gst_worker.console import ConsoleActions
 from gst_worker.queue_policy import configured_models
@@ -172,14 +173,22 @@ class QueueWorker:
         self.console = ConsoleActions(queue_dir)
         self.queue.recover_interrupted_jobs()
 
+    def models(self) -> tuple[str, ...]:
+        return configured_models(
+            str(self.settings.get("gst_model") or ""), str(self.settings.get("gst_fallback_model") or "")
+        )
+
+    def apply_settings(self, settings: dict[str, Any]) -> None:
+        """Adopt new settings; a newly configured model with quota left lifts the daily quota pause."""
+        self.settings = settings
+        sync_daily_quota_pause(str(self.queue.queue_dir), self.models())
+
     def process_once(self, now: float | None = None) -> bool:
         return self.queue.process_once(
             lambda job, update_status: process_job(job, self.settings, self.cache, self.http, update_status),
             settle_seconds=max(0, int(self.settings.get("job_settle_seconds") or 0)),
             now=now,
-            models=configured_models(
-                str(self.settings.get("gst_model") or ""), str(self.settings.get("gst_fallback_model") or "")
-            ),
+            models=self.models(),
         )
 
     def run_forever(self, sleep_seconds: int) -> None:
@@ -334,7 +343,7 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                 settings = load_settings(self.ctx["config_path"])
                 self.ctx["settings"] = settings
                 if self.ctx.get("worker") is not None:
-                    self.ctx["worker"].settings = settings
+                    self.ctx["worker"].apply_settings(settings)
                 self.send_json({"ok": True, **result})
                 return
 
@@ -344,7 +353,7 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                 settings = load_settings(self.ctx["config_path"])
                 self.ctx["settings"] = settings
                 if self.ctx.get("worker") is not None:
-                    self.ctx["worker"].settings = settings
+                    self.ctx["worker"].apply_settings(settings)
                 self.send_json(public_app_config(self.ctx["config_path"], settings))
             elif parsed.path == "/api/enqueue":
                 config = load_app_config(self.ctx["config_path"])

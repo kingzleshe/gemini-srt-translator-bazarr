@@ -24,7 +24,8 @@ not establish that unfinished subtitle output is available for resuming.
 The period after every configured model has exhausted its daily Gemini quota
 during which new translation jobs and retries are blocked; waiting jobs are
 failed rather than automatically resumed. Exhausting only one model's quota
-pauses that model alone.
+pauses that model alone. The pause follows the models configured now: switching
+to a model that still has quota lifts it.
 
 **Fallback model**:
 An optional second Gemini model that continues a translation job from its

@@ -159,6 +159,37 @@ class ModelFallbackQueueTests(unittest.TestCase):
         self.assertTrue(self.process(lambda job, update: job["gst_model"], 87_400))
         self.assertEqual(self.job("done", first)["gst_model"], PRIMARY)
 
+    def test_switching_fallback_to_a_model_with_quota_lifts_the_pause(self):
+        first = self.enqueue("first")
+        execute = Mock(side_effect=translation.DailyQuotaExceededError("429 daily quota"))
+        self.assertTrue(self.process(execute, 1000))
+        self.assertTrue(self.process(execute, 1000))
+        self.assertEqual(queue.daily_quota_pause_until(self.queue_dir, 1001), 87_400)
+
+        fresh = "gemini-3.6-flash-lite"
+        with patch("gst_worker.queue.time.time", return_value=2000):
+            # Unchanged models keep the pause; a new model with quota left lifts it.
+            self.assertEqual(queue.sync_daily_quota_pause(self.queue_dir, MODELS), 87_400)
+            self.assertIsNone(queue.sync_daily_quota_pause(self.queue_dir, (PRIMARY, fresh)))
+            self.assertIsNone(queue.queue_snapshot(self.queue_dir)["daily_quota_pause"])
+            self.assertTrue(queue.retry_failed_job(self.queue_dir, first))
+            self.assertTrue(self.jobs.process_once(lambda job, update: "translated", now=2000, models=(PRIMARY, fresh)))
+        self.assertEqual(self.job("done", first)["gst_model"], fresh)
+
+        # Switching back to two exhausted models restores the pause until the earliest expiry.
+        self.assertEqual(queue.sync_daily_quota_pause(self.queue_dir, MODELS, 3000), 87_400)
+
+    def test_settings_update_through_worker_lifts_the_pause(self):
+        execute = Mock(side_effect=translation.DailyQuotaExceededError("429 daily quota"))
+        self.enqueue("first")
+        self.assertTrue(self.process(execute, 1000))
+        self.assertTrue(self.process(execute, 1000))
+        with patch("gst_worker.queue.time.time", return_value=2000):
+            qw = worker.QueueWorker(self.queue_dir, {"gst_model": PRIMARY, "gst_fallback_model": FALLBACK}, None, None)
+            self.assertIsNotNone(queue.daily_quota_pause_until(self.queue_dir))
+            qw.apply_settings({"gst_model": PRIMARY, "gst_fallback_model": "gemini-3.6-flash-lite"})
+            self.assertIsNone(queue.daily_quota_pause_until(self.queue_dir))
+
 
 class ProcessJobModelTests(unittest.TestCase):
     def test_process_job_runs_the_model_selected_by_the_queue(self):

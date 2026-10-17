@@ -111,7 +111,9 @@ jobs may also have a sibling `.error` file containing the exception text.
 Deferred jobs record `retry_at`. `provider-pause.json` records which models have
 exhausted their daily quota (`models`, model name to expiry) and, once every
 configured model has, the global circuit breaker (`reason`, `retry_at`) that
-prevents other work from consuming requests.
+prevents other work from consuming requests. The worker re-derives the circuit
+breaker from `models` whenever settings change and before each claim, so
+switching to a model that still has quota lifts it.
 
 ## Job Shape
 
@@ -159,7 +161,8 @@ model after a provider outage. A manual retry clears the retry fields.
    model still has quota, the job returns to `pending` and continues on it.
    Once every configured model is exhausted, the job and waiting jobs move to
    `failed`, automatic retries are cancelled, and admission and manual retries
-   are blocked until the first model's pause expires.
+   are blocked until the first model's pause expires, or until the settings
+   name a model whose quota is not exhausted.
    Content line-count errors alone retry with the smaller batch size.
 7. On success, the job moves to `done`.
 8. The worker refreshes Bazarr with `scan-disk`; if item IDs are missing, it
